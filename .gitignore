@@ -34,3 +34,4 @@ Thumbs.db
 *.tfstate
 *.tfstate.*
 .terraform/
+frontend/client-app/public/config.js

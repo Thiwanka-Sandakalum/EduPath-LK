@@ -4,7 +4,7 @@ import { useAppStore } from '../../../context/AppContext';
 import { ChatSession, ChatMessage } from '../../../types';
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const SYSTEM_INSTRUCTION = `You are the EduPath LK Assistant, an expert educational consultant for Sri Lanka.
 Use Google Search grounding to provide the LATEST scholarship deadlines, university rankings, and UGC updates.
@@ -66,40 +66,40 @@ const AIChat = () => {
     setCurrentSources([]);
 
     try {
-      const result = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: updatedMessages.map(m => ({
-          role: m.role === 'bot' ? 'model' : 'user',
-          parts: [{ text: m.text }]
-        })),
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          tools: [{ googleSearch: {} }]
-        }
-      });
+      // const result = await ai.models.generateContent({
+      //   model: 'gemini-3-flash-preview',
+      //   contents: updatedMessages.map(m => ({
+      //     role: m.role === 'bot' ? 'model' : 'user',
+      //     parts: [{ text: m.text }]
+      //   })),
+      //   config: {
+      //     systemInstruction: SYSTEM_INSTRUCTION,
+      //     tools: [{ googleSearch: {} }]
+      //   }
+      // });
 
-      const botText = result.text || "I'm sorry, I couldn't process that.";
-      const grounding = result.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-      const sources = grounding
-        .filter((chunk: any) => chunk.web)
-        .map((chunk: any) => ({
-          title: chunk.web.title,
-          uri: chunk.web.uri
-        }));
+      // const botText = result.text || "I'm sorry, I couldn't process that.";
+      // const grounding = result.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      // const sources = grounding
+      //   .filter((chunk: any) => chunk.web)
+      //   .map((chunk: any) => ({
+      //     title: chunk.web.title,
+      //     uri: chunk.web.uri
+      //   }));
 
-      const botMsgId = (Date.now() + 1).toString();
-      const botMsg: ChatMessage = {
-        id: botMsgId,
-        role: 'bot',
-        text: botText,
-        timestamp: new Date()
-      };
+      // const botMsgId = (Date.now() + 1).toString();
+      // const botMsg: ChatMessage = {
+      //   id: botMsgId,
+      //   role: 'bot',
+      //   text: botText,
+      //   timestamp: new Date()
+      // };
 
-      saveChatSession({
-        ...currentSession,
-        messages: [...updatedMessages, botMsg]
-      });
-      setCurrentSources(sources);
+      // saveChatSession({
+      //   ...currentSession,
+      //   messages: [...updatedMessages, botMsg]
+      // });
+      // setCurrentSources(sources);
 
     } catch (error) {
       console.error("Gemini Error:", error);
