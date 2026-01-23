@@ -11,16 +11,16 @@ import {
    LogOut,
    ChevronRight
 } from 'lucide-react';
-import { useAppStore } from '../../../context/AppContext';
+import { useAuth0 } from '@auth0/auth0-react';
 
 const Settings = () => {
    const navigate = useNavigate();
-   const { darkMode, toggleDarkMode, logout } = useAppStore();
+   const { darkMode, toggleDarkMode } = useAppStore();
+   const { logout } = useAuth0();
 
    const handleLogout = () => {
       if (window.confirm('Are you sure you want to log out?')) {
-         logout();
-         navigate('/');
+         logout({ returnTo: window.location.origin });
       }
    };
 

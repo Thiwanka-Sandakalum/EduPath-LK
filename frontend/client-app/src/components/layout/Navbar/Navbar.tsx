@@ -7,6 +7,7 @@ import {
   Mail, Lock, User as UserIcon, Sparkles
 } from 'lucide-react';
 import { useAppStore } from '../../../context/AppContext';
+import { useAuth0 } from '@auth0/auth0-react';
 import { translations, Language } from '../../../data/translations';
 
 const Navbar = () => {
@@ -15,17 +16,8 @@ const Navbar = () => {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  const [authLoading, setAuthLoading] = useState(false);
-  const [authError, setAuthError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-
-  const { language, setLanguage, user, logout, login, register, googleLogin } = useAppStore();
+  const { language, setLanguage } = useAppStore();
+  const { user, loginWithRedirect, logout, isAuthenticated, isLoading } = useAuth0();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -67,55 +59,14 @@ const Navbar = () => {
   }, []);
 
   useEffect(() => {
-    if (isMobileMenuOpen || showAuthModal) {
+    if (isMobileMenuOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'unset';
     }
-  }, [isMobileMenuOpen, showAuthModal]);
+  }, [isMobileMenuOpen]);
 
-  const resetAuthForm = () => {
-    setEmail('');
-    setPassword('');
-    setName('');
-    setAuthError('');
-    setShowPassword(false);
-  };
 
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthLoading(true);
-    setAuthError('');
-
-    try {
-      if (authMode === 'login') {
-        const success = await login(email, password);
-        if (success) {
-          setShowAuthModal(false);
-          resetAuthForm();
-        } else {
-          setAuthError('Invalid credentials. Access denied.');
-        }
-      } else {
-        if (!name.trim()) {
-          setAuthError('Full name is required for registration.');
-          setAuthLoading(false);
-          return;
-        }
-        const success = await register({ name, email, password });
-        if (success) {
-          setShowAuthModal(false);
-          resetAuthForm();
-        } else {
-          setAuthError('User already exists in the system.');
-        }
-      }
-    } catch (err) {
-      setAuthError('System error. Please try again.');
-    } finally {
-      setAuthLoading(false);
-    }
-  };
 
   const isLandingPage = location.pathname === '/';
   const isSolid = scrolled || !isLandingPage;
@@ -132,8 +83,8 @@ const Navbar = () => {
     <>
       <header
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-700 ease-in-out ${isSolid
-            ? 'bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border-b border-slate-200/50 dark:border-slate-800/50 py-3 shadow-premium'
-            : 'bg-transparent py-8'
+          ? 'bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border-b border-slate-200/50 dark:border-slate-800/50 py-3 shadow-premium'
+          : 'bg-transparent py-8'
           }`}
       >
         <div className="container mx-auto px-6 flex items-center justify-between">
@@ -154,8 +105,8 @@ const Navbar = () => {
                 key={item.path}
                 to={item.path}
                 className={`text-sm font-bold px-4 py-2.5 rounded-xl transition-all relative group overflow-hidden ${location.pathname === item.path
-                    ? (isSolid ? 'text-primary-600' : 'text-primary-400')
-                    : (isSolid ? 'text-slate-600 hover:text-primary-600' : 'text-white/80 hover:text-white')
+                  ? (isSolid ? 'text-primary-600' : 'text-primary-400')
+                  : (isSolid ? 'text-slate-600 hover:text-primary-600' : 'text-white/80 hover:text-white')
                   }`}
               >
                 <span className="relative z-10 transition-transform group-hover:-translate-y-px">{item.label}</span>
@@ -170,8 +121,8 @@ const Navbar = () => {
               <button
                 onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border transition-all text-xs font-black tracking-widest active:scale-95 ${isSolid
-                    ? 'border-slate-200/60 text-slate-700 bg-slate-50/50 hover:bg-slate-100'
-                    : 'border-white/20 text-white bg-white/5 hover:bg-white/15'
+                  ? 'border-slate-200/60 text-slate-700 bg-slate-50/50 hover:bg-slate-100'
+                  : 'border-white/20 text-white bg-white/5 hover:bg-white/15'
                   }`}
               >
                 <Globe size={16} className={isLangMenuOpen ? 'animate-spin-slow' : ''} />
@@ -186,8 +137,8 @@ const Navbar = () => {
                       key={lang.code}
                       onClick={() => { setLanguage(lang.code); setIsLangMenuOpen(false); }}
                       className={`w-full px-5 py-4 flex items-center justify-between text-xs font-bold rounded-xl transition-all mb-1 last:mb-0 group/item active:scale-[0.98] ${language === lang.code
-                          ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600'
-                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:translate-x-1'
+                        ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:translate-x-1'
                         }`}
                     >
                       <span className="flex items-center gap-3">
@@ -205,16 +156,16 @@ const Navbar = () => {
               )}
             </div>
 
-            {user ? (
+            {isAuthenticated && user ? (
               <div className="relative" ref={profileMenuRef}>
                 <button
                   onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
                   className="flex items-center gap-2 p-1.5 pr-4 rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/50 dark:bg-slate-800/50 backdrop-blur-md hover:shadow-soft transition-all hover:border-primary-300 dark:hover:border-primary-800 group active:scale-95"
                 >
                   <div className="w-9 h-9 rounded-full overflow-hidden shadow-sm ring-2 ring-primary-500/20 group-hover:ring-primary-500/50 transition-all">
-                    <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.name}`} alt={user.name} className="w-full h-full object-cover" />
+                    <img src={user.picture || `https://ui-avatars.com/api/?name=${user.name}`} alt={user.name} className="w-full h-full object-cover" />
                   </div>
-                  <span className="text-[11px] font-black text-slate-700 dark:text-slate-200 hidden sm:block max-w-[100px] truncate uppercase tracking-tighter">{user.name.split(' ')[0]}</span>
+                  <span className="text-[11px] font-black text-slate-700 dark:text-slate-200 hidden sm:block max-w-[100px] truncate uppercase tracking-tighter">{user.name?.split(' ')[0]}</span>
                   <ChevronDown size={14} className={`text-slate-400 transition-transform duration-500 ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
 
@@ -246,7 +197,7 @@ const Navbar = () => {
                     </div>
                     <div className="h-px bg-slate-100 dark:bg-slate-800 my-2 mx-3"></div>
                     <button
-                      onClick={() => { logout(); setIsProfileMenuOpen(false); navigate('/'); }}
+                      onClick={() => { logout(); setIsProfileMenuOpen(false); }}
                       className="w-full flex items-center gap-3 px-5 py-4 text-sm font-black text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all uppercase tracking-widest group active:scale-[0.98] hover:translate-x-1"
                     >
                       <div className="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-900/20 flex items-center justify-center group-hover:bg-red-100 dark:group-hover:bg-red-900/40 transition-colors">
@@ -259,10 +210,10 @@ const Navbar = () => {
               </div>
             ) : (
               <button
-                onClick={() => { setAuthMode('login'); setShowAuthModal(true); }}
+                onClick={() => loginWithRedirect()}
                 className={`px-7 py-3 rounded-2xl text-xs font-black uppercase tracking-[0.15em] transition-all hover:scale-105 active:scale-95 shadow-glow relative overflow-hidden group ${isSolid
-                    ? 'bg-primary-600 text-white shadow-premium'
-                    : 'bg-white text-primary-600 hover:shadow-2xl'
+                  ? 'bg-primary-600 text-white shadow-premium'
+                  : 'bg-white text-primary-600 hover:shadow-2xl'
                   }`}
               >
                 <span className="relative z-10">Sign In</span>
@@ -296,8 +247,8 @@ const Navbar = () => {
                 ))}
               </nav>
               <div className="p-8 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
-                {!user ? (
-                  <button onClick={() => { setIsMobileMenuOpen(false); setShowAuthModal(true); }} className="w-full py-5 bg-primary-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-sm shadow-premium active:scale-95 transition-all">Get Started</button>
+                {!isAuthenticated ? (
+                  <button onClick={() => { setIsMobileMenuOpen(false); loginWithRedirect(); }} className="w-full py-5 bg-primary-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-sm shadow-premium active:scale-95 transition-all">Get Started</button>
                 ) : (
                   <Link to="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="w-full flex items-center justify-center gap-3 py-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-2xl font-black uppercase tracking-[0.2em] text-sm shadow-sm active:scale-95 transition-all">Dashboard <ArrowRight size={18} /></Link>
                 )}
@@ -307,75 +258,7 @@ const Navbar = () => {
         </div>
       </header>
 
-      {showAuthModal && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in" onClick={(e) => e.target === e.currentTarget && setShowAuthModal(false)}>
-          <div className="bg-white dark:bg-slate-900 rounded-[3rem] w-full max-w-md overflow-hidden shadow-2xl animate-pop-in relative border border-white/20 dark:border-slate-800">
-            <div className="flex bg-slate-50 dark:bg-slate-800/50 p-2.5 gap-2 border-b border-slate-100 dark:border-slate-800">
-              <button
-                onClick={() => setAuthMode('login')}
-                className={`flex-1 py-4 text-xs font-black uppercase tracking-[0.2em] transition-all rounded-2xl relative ${authMode === 'login' ? 'bg-white dark:bg-slate-900 text-primary-600 shadow-soft' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-              >
-                Log In
-                {authMode === 'login' && <span className="absolute bottom-0 left-6 right-6 h-1 bg-primary-500 rounded-full animate-fade-in"></span>}
-              </button>
-              <button
-                onClick={() => setAuthMode('signup')}
-                className={`flex-1 py-4 text-xs font-black uppercase tracking-[0.2em] transition-all rounded-2xl relative ${authMode === 'signup' ? 'bg-white dark:bg-slate-900 text-primary-600 shadow-soft' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-              >
-                Sign Up
-                {authMode === 'signup' && <span className="absolute bottom-0 left-6 right-6 h-1 bg-primary-500 rounded-full animate-fade-in"></span>}
-              </button>
-            </div>
 
-            <button onClick={() => setShowAuthModal(false)} className="absolute top-6 right-6 p-2 bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-xl transition-all z-10 active:scale-90"><X size={18} /></button>
-
-            <div className="p-10 md:p-12">
-              <div className="text-center mb-10">
-                <div className="inline-flex p-5 rounded-[2rem] bg-primary-50 dark:bg-primary-900/30 text-primary-600 mb-6 shadow-inner ring-4 ring-primary-500/5">
-                  <Sparkles size={36} className="animate-pulse" />
-                </div>
-                <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight leading-none">{authMode === 'login' ? 'Welcome back' : 'Join the hub'}</h2>
-                <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] mt-3">{authMode === 'login' ? 'Authorized access only' : 'Create your secure account'}</p>
-              </div>
-
-              <form onSubmit={handleAuthSubmit} className="space-y-4">
-                {authMode === 'signup' && (
-                  <div className="relative group">
-                    <UserIcon size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary-500 transition-colors" />
-                    <input required type="text" placeholder="Full Name" className="w-full pl-14 pr-6 py-4.5 bg-slate-50 dark:bg-slate-800/50 border-2 border-transparent rounded-2xl outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500/30 focus:bg-white dark:focus:bg-slate-800 font-bold transition-all text-sm dark:text-white" value={name} onChange={e => setName(e.target.value)} />
-                  </div>
-                )}
-                <div className="relative group">
-                  <Mail size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary-500 transition-colors" />
-                  <input required type="email" placeholder="Email address" className="w-full pl-14 pr-6 py-4.5 bg-slate-50 dark:bg-slate-800/50 border-2 border-transparent rounded-2xl outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500/30 focus:bg-white dark:focus:bg-slate-800 font-bold transition-all text-sm dark:text-white" value={email} onChange={e => setEmail(e.target.value)} />
-                </div>
-                <div className="relative group">
-                  <Lock size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary-500 transition-colors" />
-                  <input required type={showPassword ? "text" : "password"} placeholder="Password" className="w-full pl-14 pr-14 py-4.5 bg-slate-50 dark:bg-slate-800/50 border-2 border-transparent rounded-2xl outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500/30 focus:bg-white dark:focus:bg-slate-800 font-bold transition-all text-sm dark:text-white" value={password} onChange={e => setPassword(e.target.value)} />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary-600 transition-colors p-1">
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-                {authError && <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-2xl flex items-center gap-3 text-red-600 dark:text-red-400 text-[11px] font-black uppercase tracking-tighter border border-red-100 dark:border-red-900/30"><AlertCircle size={16} /> {authError}</div>}
-                <button type="submit" disabled={authLoading} className="w-full py-5 mt-6 bg-primary-600 text-white rounded-2xl font-black uppercase tracking-[0.25em] text-[11px] shadow-glow hover:bg-primary-700 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:opacity-50">
-                  {authLoading ? <Loader2 size={18} className="animate-spin" /> : (authMode === 'login' ? 'Authenticate' : 'Register')}
-                </button>
-              </form>
-
-              <div className="mt-10 text-center">
-                <div className="relative mb-6">
-                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100 dark:border-slate-800"></div></div>
-                  <div className="relative flex justify-center text-xs"><span className="bg-white dark:bg-slate-900 px-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.3em]">Social gateway</span></div>
-                </div>
-                <button onClick={() => { googleLogin({ name: 'Guest Explorer', email: 'guest@edupath.lk' }); setShowAuthModal(false); }} className="w-full flex items-center justify-center gap-3 py-4 border-2 border-slate-100 dark:border-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95 group">
-                  <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-4 h-4 group-hover:scale-110 transition-transform" alt="Google" />
-                  Continue with Google
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 };

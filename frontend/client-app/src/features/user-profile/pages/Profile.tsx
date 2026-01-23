@@ -8,12 +8,12 @@ import {
    Plus, Trash2, Edit2, CheckCircle, Scroll, Award, Laptop, Wrench, X,
    ChevronRight, Fingerprint, ShieldCheck, HardHat, FileText, Building2
 } from 'lucide-react';
-import { useAppStore } from '../../../context/AppContext';
+import { useAuth0 } from '@auth0/auth0-react';
 import { StudentDetails, AdditionalEducation } from '../../../types';
 
 const Profile = () => {
    const navigate = useNavigate();
-   const { user, updateUser, logout } = useAppStore();
+   const { user, logout, isAuthenticated, isLoading } = useAuth0();
    const [loading, setLoading] = useState(false);
    const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -32,36 +32,18 @@ const Profile = () => {
    const [isOngoing, setIsOngoing] = useState(false);
 
    useEffect(() => {
-      if (!user) {
+      if (!isAuthenticated && !isLoading) {
          navigate('/');
          return;
       }
-
-      if (user.studentDetails) {
-         const details = user.studentDetails;
-         Object.keys(details).forEach(key => {
-            if (key !== 'additionalEducation') {
-               setValue(key as keyof StudentDetails, details[key as keyof StudentDetails] as string);
-            }
-         });
-         if (details.additionalEducation) {
-            setEducationList(details.additionalEducation);
-         }
-      } else {
-         setValue('fullName', user.name);
-      }
-   }, [user, navigate, setValue]);
+      // Optionally, setValue for other fields if you store them elsewhere
+      // Name/email are from Auth0 and not editable here
+   }, [isAuthenticated, isLoading, navigate]);
 
    const handleGeneralSubmit = (data: StudentDetails) => {
       setLoading(true);
       setTimeout(() => {
-         updateUser({
-            name: data.fullName,
-            studentDetails: {
-               ...data,
-               additionalEducation: educationList
-            }
-         });
+         // You may want to store additional profile data in your own DB
          setLoading(false);
          alert('Profile updated successfully!');
       }, 800);
@@ -90,11 +72,7 @@ const Profile = () => {
       if (window.confirm("Delete this qualification?")) {
          const updatedList = educationList.filter(e => e.id !== id);
          setEducationList(updatedList);
-         if (user?.studentDetails) {
-            updateUser({
-               studentDetails: { ...user.studentDetails, additionalEducation: updatedList }
-            });
-         }
+         // Optionally, sync with your backend
       }
    };
 
@@ -122,27 +100,18 @@ const Profile = () => {
 
       setEducationList(updatedList);
       setIsAddingEdu(false);
-      if (user?.studentDetails) {
-         updateUser({
-            studentDetails: { ...user.studentDetails, additionalEducation: updatedList }
-         });
-      }
+      // Optionally, sync with your backend
    };
 
    const handleLogout = () => {
       if (window.confirm('Are you sure you want to log out?')) {
-         logout();
-         navigate('/');
+         logout({ returnTo: window.location.origin });
       }
    };
 
    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-         const reader = new FileReader();
-         reader.onloadend = () => updateUser({ avatarUrl: reader.result as string });
-         reader.readAsDataURL(file);
-      }
+      // Avatar upload would require backend or Auth0 Management API
+      alert('Profile picture change is not supported in this demo.');
    };
 
    const getEduIcon = (type: string) => {
@@ -157,7 +126,7 @@ const Profile = () => {
       }
    };
 
-   if (!user) return null;
+   if (!isAuthenticated || !user) return null;
 
    return (
       <div className="min-h-screen bg-[#f1f5f9] dark:bg-slate-950 font-sans pb-24 transition-colors duration-300">
@@ -180,7 +149,7 @@ const Profile = () => {
                         <div className="relative mb-6 group">
                            <div className="w-32 h-32 rounded-[2rem] border-4 border-white dark:border-slate-900 shadow-2xl bg-white flex items-center justify-center overflow-hidden transition-transform group-hover:scale-105 duration-500">
                               <img
-                                 src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.name}&background=random`}
+                                 src={user.picture || `https://ui-avatars.com/api/?name=${user.name}&background=random`}
                                  alt="Profile"
                                  className="w-full h-full object-cover"
                               />
@@ -200,11 +169,11 @@ const Profile = () => {
                         <div className="w-full grid grid-cols-1 gap-2">
                            <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-xs font-bold text-slate-600 dark:text-slate-400 border border-transparent hover:border-slate-100 transition-all">
                               <Phone size={18} className="text-blue-500" />
-                              <span>{user.studentDetails?.mobile || 'No Mobile Registered'}</span>
+                              <span>{'No Mobile Registered'}</span>
                            </div>
                            <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-xs font-bold text-slate-600 dark:text-slate-400 border border-transparent hover:border-slate-100 transition-all">
                               <MapPin size={18} className="text-blue-500" />
-                              <span>{user.studentDetails?.district || 'District Not Set'}</span>
+                              <span>{'District Not Set'}</span>
                            </div>
                            <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-xs font-bold text-slate-600 dark:text-slate-400 border border-transparent hover:border-slate-100 transition-all">
                               <ShieldCheck size={18} className="text-blue-500" />
