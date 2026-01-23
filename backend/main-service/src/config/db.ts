@@ -3,6 +3,7 @@ import logger from './logger';
 
 export const connectDB = async () => {
     const uri = process.env.MONGO_URI || '';
+    console.log('Connecting to MongoDB...', uri);
     let timeout = 10; // try for up to 10 times (10 seconds)
     while (mongoose.connection.readyState === 0 && timeout > 0) {
         try {
