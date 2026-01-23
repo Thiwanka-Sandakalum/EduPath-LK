@@ -55,7 +55,7 @@ app.use((err: OpenApiError, req: Request, res: Response, next: NextFunction) => 
     }
 });
 
-app.use('/api', routes);
+app.use('/', routes);
 
 app.use(errorHandler);
 
