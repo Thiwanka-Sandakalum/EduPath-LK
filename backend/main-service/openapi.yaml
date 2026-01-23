@@ -294,22 +294,31 @@ paths:
             type: string
         - name: level
           in: query
-          description: Filter by academic level
+          description: Filter by academic level (e.g., Undergraduate, Postgraduate)
           schema:
             type: string
-        - name: duration_value
-          in: query
-          description: Filter by duration value (number of months/years)
-          schema:
-            type: number
         - name: delivery_mode
           in: query
-          description: Filter by delivery mode
+          description: Filter by delivery mode (e.g., Full-time, Part-time, Online)
+          schema:
+            type: string
+        - name: specializations
+          in: query
+          description: Filter by specialization(s) (e.g., AI, Data Science). Accepts a single value or an array.
+          schema:
+            oneOf:
+              - type: string
+              - type: array
+                items:
+                  type: string
+        - name: duration
+          in: query
+          description: Filter by duration (partial match, if stored as a simple value)
           schema:
             type: string
         - name: eligibility
           in: query
-          description: Filter by eligibility (partial match)
+          description: Filter by eligibility (partial match, if stored as a simple value)
           schema:
             type: string
         - name: sort
@@ -376,13 +385,16 @@ paths:
             type: string
             enum:
               [
-                level,
-                delivery_mode,
-                specializations,
                 institution_id,
                 name,
                 program_code,
-                duration.unit,
+                description,
+                level,
+                duration,
+                delivery_mode,
+                fees,
+                eligibility,
+                specializations,
               ]
       responses:
         "200":

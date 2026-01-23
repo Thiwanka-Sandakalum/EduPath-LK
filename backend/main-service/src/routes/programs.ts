@@ -5,12 +5,12 @@ import { getDistinctValues } from '../controllers/programDistinctController';
 
 const router = Router();
 
+router.get('/distinct', getDistinctValues);
 router.get('/', listPrograms);
 router.post('/', authenticateJWT, createProgram);
 router.get('/:programId', getProgram);
 router.put('/:programId', authenticateJWT, updateProgram);
 router.patch('/:programId', authenticateJWT, patchProgram);
 router.delete('/:programId', authenticateJWT, deleteProgram);
-router.get('/distinct', getDistinctValues);
 
 export default router;
