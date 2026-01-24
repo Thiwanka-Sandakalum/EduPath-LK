@@ -24,18 +24,40 @@ const CoursesPage = () => {
   }, []);
 
 
+
   // State for API data
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
 
   // State for institutions
   const [institutions, setInstitutions] = useState<any[]>([]);
   const [instLoading, setInstLoading] = useState(false);
   const [instError, setInstError] = useState<string | null>(null);
 
+  // Filter state
+  const [filterInstitution, setFilterInstitution] = useState('');
+  const [filterLevel, setFilterLevel] = useState('');
+  const [filterDeliveryMode, setFilterDeliveryMode] = useState('');
+  const [filterSpecialization, setFilterSpecialization] = useState('');
+  const [filterName, setFilterName] = useState('');
+  const [filterDuration, setFilterDuration] = useState('');
+  const [filterEligibility, setFilterEligibility] = useState('');
+
+  // Distinct filter options
+  const [levels, setLevels] = useState<string[]>([]);
+  const [deliveryModes, setDeliveryModes] = useState<string[]>([]);
+  const [specializations, setSpecializations] = useState<string[]>([]);
+  const [durations, setDurations] = useState<string[]>([]);
+  const [eligibilities, setEligibilities] = useState<string[]>([]);
 
 
+
+
+  // Fetch filter dropdown options
   useEffect(() => {
     setInstLoading(true);
     setInstError(null);
@@ -47,21 +69,45 @@ const CoursesPage = () => {
         setInstError('Failed to load institutions');
       })
       .finally(() => setInstLoading(false));
+
+    // Fetch distinct values for dropdowns
+    ProgramsService.getProgramDistinctValues('level').then(res => setLevels(res.values || []));
+    ProgramsService.getProgramDistinctValues('delivery_mode').then(res => setDeliveryModes(res.values || []));
+    ProgramsService.getProgramDistinctValues('specializations').then(res => setSpecializations(res.values || []));
+    ProgramsService.getProgramDistinctValues('duration').then(res => setDurations(res.values || []));
+    ProgramsService.getProgramDistinctValues('eligibility').then(res => setEligibilities(res.values || []));
   }, []);
 
-  // Fetch all courses from API once
+
+  // Reset to page 1 when filters or pageSize change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterInstitution, filterLevel, filterDeliveryMode, filterSpecialization, filterName, filterDuration, filterEligibility, pageSize]);
+
+  // Fetch courses with filters and pagination
   useEffect(() => {
     setLoading(true);
     setError(null);
-    ProgramsService.listPrograms(1, 100)
+    ProgramsService.listPrograms(
+      currentPage,
+      pageSize,
+      filterInstitution || undefined,
+      filterName || undefined,
+      filterLevel || undefined,
+      filterDeliveryMode || undefined,
+      filterSpecialization || undefined,
+      filterDuration || undefined,
+      filterEligibility || undefined
+    )
       .then((res) => {
         setCourses(res.data || []);
+        setTotalPages(res.pagination?.total ? Math.ceil(res.pagination.total / pageSize) : 1);
       })
       .catch(() => {
         setError('Failed to load courses');
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [currentPage, pageSize, filterInstitution, filterLevel, filterDeliveryMode, filterSpecialization, filterName, filterDuration, filterEligibility]);
 
 
 
@@ -82,6 +128,139 @@ const CoursesPage = () => {
       </div>
 
       <div className="container mx-auto px-6 -mt-16 relative z-10">
+
+        {/* FILTER BAR */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow p-6 mb-10 flex flex-wrap gap-4 items-end">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Institution</label>
+            <select
+              className="w-48 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
+              value={filterInstitution}
+              onChange={e => setFilterInstitution(e.target.value)}
+            >
+              <option value="">All</option>
+              {institutions.map(inst => (
+                <option key={inst._id} value={inst._id}>{inst.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Level</label>
+            <select
+              className="w-36 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
+              value={filterLevel}
+              onChange={e => setFilterLevel(e.target.value)}
+            >
+              <option value="">All</option>
+              {levels.filter(lvl => typeof lvl === 'string' && lvl.trim()).map(lvl => (
+                <option key={lvl} value={lvl}>{lvl}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Delivery Mode</label>
+            <select
+              className="w-36 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
+              value={filterDeliveryMode}
+              onChange={e => setFilterDeliveryMode(e.target.value)}
+            >
+              <option value="">All</option>
+              {deliveryModes.filter(mode => typeof mode === 'string' && mode.trim()).map(mode => (
+                <option key={mode} value={mode}>{mode}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Specialization</label>
+            <select
+              className="w-44 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
+              value={filterSpecialization}
+              onChange={e => setFilterSpecialization(e.target.value)}
+            >
+              <option value="">All</option>
+              {specializations.filter(spec => typeof spec === 'string' && spec.trim()).map(spec => (
+                <option key={spec} value={spec}>{spec}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Program Name</label>
+            <input
+              type="text"
+              className="w-48 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
+              placeholder="Search by name"
+              value={filterName}
+              onChange={e => setFilterName(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Duration</label>
+            <select
+              className="w-32 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
+              value={filterDuration}
+              onChange={e => setFilterDuration(e.target.value)}
+            >
+              <option value="">All</option>
+              {durations.filter(Boolean).map((dur, idx) => {
+                if (typeof dur === 'string') {
+                  return <option key={dur} value={dur}>{dur}</option>;
+                }
+                if (typeof dur === 'object' && dur !== null) {
+                  // Format object duration
+                  const { years, months, weeks } = dur;
+                  const label = [
+                    years ? `${years} year${years > 1 ? 's' : ''}` : null,
+                    months ? `${months} month${months > 1 ? 's' : ''}` : null,
+                    weeks ? `${weeks} week${weeks > 1 ? 's' : ''}` : null
+                  ].filter(Boolean).join(' ');
+                  const value = JSON.stringify(dur);
+                  return <option key={value} value={value}>{label || value}</option>;
+                }
+                return null;
+              })}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Eligibility</label>
+            <select
+              className="w-40 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
+              value={filterEligibility}
+              onChange={e => setFilterEligibility(e.target.value)}
+            >
+              <option value="">All</option>
+              {eligibilities.filter(el => typeof el === 'string' && el.trim()).map(el => (
+                <option key={el} value={el}>{el}</option>
+              ))}
+            </select>
+          </div>
+          {/* Per-page selector */}
+          <div className="ml-auto flex flex-col items-end">
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Per Page</label>
+            <select
+              className="w-24 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
+              value={pageSize}
+              onChange={e => setPageSize(Number(e.target.value))}
+            >
+              <option value={12}>12</option>
+              <option value={24}>24</option>
+              <option value={36}>36</option>
+            </select>
+          </div>
+          <button
+            className="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-blue-50 hover:text-blue-700 transition-all"
+            onClick={() => {
+              setFilterInstitution('');
+              setFilterLevel('');
+              setFilterDeliveryMode('');
+              setFilterSpecialization('');
+              setFilterName('');
+              setFilterDuration('');
+              setFilterEligibility('');
+            }}
+          >
+            Clear Filters
+          </button>
+        </div>
 
         {loading ? (
           <div className="text-center py-32">Loading courses...</div>
@@ -148,11 +327,6 @@ const CoursesPage = () => {
                       </div>
                     </div>
                     <div className="mt-auto pt-8 border-t border-slate-50 dark:border-slate-800 flex items-center justify-between">
-                      {/* <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        Annual Fee: <span className="text-slate-900 dark:text-white block text-sm mt-0.5">
-                          {typeof course.fees === 'string' && course.fees ? course.fees.split(' ')[0] : (course.fees ?? 'N/A')}
-                        </span>
-                      </div> */}
                       <Link
                         to={`/courses/${course._id || course.id}`}
                         className="flex items-center text-blue-600 text-[10px] font-black uppercase tracking-widest group/btn"
@@ -164,19 +338,25 @@ const CoursesPage = () => {
                 );
               })}
             </div>
-            {/* {filteredCourses.length === 0 && (
-              <div className="text-center py-32 bg-slate-50 dark:bg-slate-900/50 rounded-[3rem] border-2 border-dashed border-slate-200 dark:border-slate-800 reveal">
-                <div className="w-20 h-20 bg-white dark:bg-slate-800 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-sm text-slate-300"><Search size={32} /></div>
-                <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-3">No Courses Matching</h3>
-                <p className="text-slate-500 dark:text-slate-400 font-medium max-w-sm mx-auto">Try broadening your filters or checking different academic fields.</p>
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-2 mt-12">
                 <button
-                  onClick={() => { setSearchQuery(''); setFilterField('All'); setFilterLevel('All'); setFilterInst('All'); }}
-                  className="mt-10 text-blue-600 font-black text-[11px] uppercase tracking-widest hover:underline"
+                  className="px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 font-bold disabled:opacity-50"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
                 >
-                  Clear Filters
+                  Prev
+                </button>
+                <button
+                  className="px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 font-bold disabled:opacity-50"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
                 </button>
               </div>
-            )} */}
+            )}
           </>
         )}
       </div>
