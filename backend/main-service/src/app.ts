@@ -2,6 +2,7 @@
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
+import cors from 'cors';
 import { errorHandler } from './middlewares/errorHandler';
 import routes from './routes';
 import logger from './config/logger';
@@ -12,6 +13,9 @@ const app = express();
 
 app.use(express.json());
 app.use(helmet());
+
+// Allow CORS from any origin
+app.use(cors());
 
 
 
