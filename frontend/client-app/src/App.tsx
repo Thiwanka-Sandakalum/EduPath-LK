@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import Navbar from './components/layout/Navbar/Navbar';
 import ChatWidget from './features/chat/components/ChatWidget/ChatWidget';
@@ -23,6 +23,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { ScrollToTop, ForceHome, ScrollObserver } from './components/layout/ScrollUtils';
 import MainLayout from './components/layout/MainLayout';
 import Footer from './components/layout/Footer';
+import { OpenAPI } from './types';
 
 
 
@@ -33,6 +34,23 @@ const App = () => {
     error,
     loginWithRedirect: login
   } = useAuth0();
+
+
+  OpenAPI.BASE = (window as any).config.BASE_API_URL;
+
+  const { getAccessTokenSilently } = useAuth0();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      getAccessTokenSilently()
+        .then(token => {
+          OpenAPI.TOKEN = token;
+        })
+        .catch(() => {
+          OpenAPI.TOKEN = undefined;
+        });
+    }
+  }, [isAuthenticated, getAccessTokenSilently]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated && !error) {
@@ -65,7 +83,7 @@ const App = () => {
 
   return (
     <AppProvider>
-      <HashRouter>
+      <BrowserRouter>
         <ScrollToTop />
         <ForceHome />
         <ScrollObserver />
@@ -95,7 +113,7 @@ const App = () => {
           <Footer />
           <ChatWidget />
         </div>
-      </HashRouter>
+      </BrowserRouter>
     </AppProvider>
   );
 };

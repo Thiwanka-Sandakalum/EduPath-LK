@@ -1,7 +1,9 @@
 
 import React, { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { courses, institutions } from '../../../../data/mockData';
+// import { courses, institutions } from '../../../../data/mockData';
+import { ProgramsService } from '../../../../types/services/ProgramsService';
+import { InstitutionsService } from '../../../../types/services/InstitutionsService';
 import { useAppStore } from '../../../../context/AppContext';
 import { Clock, DollarSign, Calendar, ArrowLeft, Check, AlertCircle, X, MapPin, Share2, BookOpen, Briefcase, Globe, Users, Star, Building2, ChevronRight } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -17,14 +19,43 @@ const fieldImages: Record<string, string> = {
 };
 
 const CourseDetail = () => {
+
    const { id } = useParams();
    const navigate = useNavigate();
    const [showApplyModal, setShowApplyModal] = useState(false);
 
-   const course = courses.find(c => c.id === id);
-   const institution = institutions.find(i => i.id === course?.institutionId);
+   const [course, setCourse] = useState<any>(null);
+   const [institution, setInstitution] = useState<any>(null);
+   const [loading, setLoading] = useState(true);
+   const [error, setError] = useState<string | null>(null);
 
-   if (!course || !institution) {
+   React.useEffect(() => {
+      if (!id) return;
+      setLoading(true);
+      setError(null);
+      ProgramsService.getProgram(id)
+         .then((data) => {
+            setCourse(data);
+            if (data && data.institution_id) {
+               InstitutionsService.getInstitution(data.institution_id)
+                  .then(setInstitution)
+                  .catch(() => setInstitution(null));
+            } else {
+               setInstitution(null);
+            }
+         })
+         .catch(() => {
+            setCourse(null);
+            setInstitution(null);
+            setError('Course not found');
+         })
+         .finally(() => setLoading(false));
+   }, [id]);
+
+   if (loading) {
+      return <div className="container mx-auto px-4 py-20 text-center">Loading...</div>;
+   }
+   if (error || !course) {
       return (
          <div className="container mx-auto px-4 py-20 text-center">
             <h2 className="text-2xl font-bold text-slate-900">Course not found</h2>
@@ -33,7 +64,28 @@ const CourseDetail = () => {
       );
    }
 
-   const heroImage = fieldImages[course.field] || institution.imageUrl;
+   // Fallbacks for missing institution
+   const inst = institution || {};
+   const heroImage = fieldImages[course.field] || inst.imageUrl;
+
+   // Helper to render fees breakdown
+   const renderFeesBreakdown = (breakdown: any) => {
+      if (!breakdown || typeof breakdown !== 'object') return null;
+      return (
+         <div className="mt-2 space-y-2">
+            {Object.entries(breakdown).map(([group, fees]: any, idx) => (
+               <div key={idx} className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                  <div className="font-bold text-slate-700 mb-1">{group}</div>
+                  <ul className="text-slate-600 text-sm space-y-1">
+                     {Object.entries(fees).map(([label, value]: any, i) => (
+                        <li key={i}><span className="font-medium">{label}:</span> {value?.toLocaleString?.() ?? value}</li>
+                     ))}
+                  </ul>
+               </div>
+            ))}
+         </div>
+      );
+   };
 
    return (
       <div className="min-h-screen bg-slate-50 font-sans pb-20">
@@ -66,9 +118,13 @@ const CourseDetail = () => {
                         </h1>
                         <div className="flex items-center gap-2 text-slate-300 text-lg font-medium">
                            <MapPin size={20} className="text-blue-400" />
-                           <Link to={`/institutions/${institution.id}`} className="hover:text-white transition-colors border-b border-transparent hover:border-white">
-                              {institution.name}
-                           </Link>
+                           {inst._id ? (
+                              <Link to={`/institutions/${inst._id}`} className="hover:text-white transition-colors border-b border-transparent hover:border-white">
+                                 {inst.name}
+                              </Link>
+                           ) : (
+                              <span>{inst.name || 'Unknown Institution'}</span>
+                           )}
                         </div>
                      </div>
 
@@ -77,12 +133,23 @@ const CourseDetail = () => {
                         <button className="w-12 h-12 flex items-center justify-center bg-white/10 backdrop-blur-md text-white rounded-xl border border-white/10 hover:bg-white/20 transition-all">
                            <Share2 size={20} />
                         </button>
-                        <button
-                           onClick={() => setShowApplyModal(true)}
-                           className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-xl font-bold transition-all shadow-lg shadow-blue-600/30 hover:-translate-y-1 text-lg"
-                        >
-                           Apply Now
-                        </button>
+                        {course.url ? (
+                           <a
+                              href={course.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-xl font-bold transition-all shadow-lg shadow-blue-600/30 hover:-translate-y-1 text-lg flex items-center justify-center"
+                           >
+                              Apply Now
+                           </a>
+                        ) : (
+                           <button
+                              onClick={() => setShowApplyModal(true)}
+                              className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-xl font-bold transition-all shadow-lg shadow-blue-600/30 hover:-translate-y-1 text-lg"
+                           >
+                              Apply Now
+                           </button>
+                        )}
                      </div>
                   </div>
                </div>
@@ -91,24 +158,28 @@ const CourseDetail = () => {
 
          <div className="container mx-auto px-4 relative z-20">
 
-            {/* 2. FLOATING STATS CARD */}
+            {/* 2. FLOATING STATS CARD (Duration & Next Intake only) */}
             <div className="w-full bg-white rounded-[2rem] shadow-xl shadow-slate-200/50 -mt-12 mb-12 border border-slate-100 reveal">
-               <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+               <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-100">
                   {/* Duration */}
                   <div className="p-5 md:p-6 flex flex-col justify-center">
                      <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                         <Clock size={16} className="text-blue-500" /> Duration
                      </div>
-                     <div className="text-xl md:text-2xl font-bold text-slate-900">{course.duration}</div>
-                  </div>
-
-                  {/* Investment */}
-                  <div className="p-5 md:p-6 flex flex-col justify-center">
-                     <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                        <DollarSign size={16} className="text-emerald-500" /> Investment
-                     </div>
-                     <div className="text-xl md:text-2xl font-bold text-slate-900 leading-tight">
-                        {course.fees.includes('Free') ? 'Free (Government funded)' : course.fees}
+                     <div className="text-xl md:text-2xl font-bold text-slate-900">
+                        {(() => {
+                           const d = course.duration;
+                           if (!d || (typeof d === 'object' && !d.years && !d.months && !d.weeks)) return 'N/A';
+                           if (typeof d === 'string') return d;
+                           if (typeof d === 'object') {
+                              const parts = [];
+                              if (d.years) parts.push(`${d.years} year${d.years > 1 ? 's' : ''}`);
+                              if (d.months) parts.push(`${d.months} month${d.months > 1 ? 's' : ''}`);
+                              if (d.weeks) parts.push(`${d.weeks} week${d.weeks > 1 ? 's' : ''}`);
+                              return parts.join(' ');
+                           }
+                           return 'N/A';
+                        })()}
                      </div>
                   </div>
 
@@ -117,18 +188,56 @@ const CourseDetail = () => {
                      <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                         <Calendar size={16} className="text-amber-500" /> Next Intake
                      </div>
-                     <div className="text-xl md:text-2xl font-bold text-slate-900">{course.deadline}</div>
-                  </div>
-
-                  {/* Requirements */}
-                  <div className="p-5 md:p-6 flex flex-col justify-center">
-                     <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                        <AlertCircle size={16} className="text-purple-500" /> Requirements
+                     <div className="text-xl md:text-2xl font-bold text-slate-900">
+                        {(() => {
+                           if (course.deadline && course.deadline !== 'N/A') return course.deadline;
+                           // Auto-generate: next year, same month as today
+                           const now = new Date();
+                           const nextYear = now.getFullYear() + 1;
+                           const month = now.toLocaleString('default', { month: 'long' });
+                           return `${month} ${nextYear}`;
+                        })()}
                      </div>
-                     <div className="text-sm font-bold text-slate-900 leading-snug">{course.entryRequirements}</div>
                   </div>
                </div>
             </div>
+            {/* Requirements Section moved here */}
+            {/* Requirements Section (Eligibility) */}
+            <section className="reveal">
+               <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                  <AlertCircle size={22} className="text-purple-500" /> Requirements
+               </h2>
+               {course.eligibility ? (
+                  <div className="space-y-2">
+                     {course.eligibility.minimum_qualifications && (
+                        <div className="text-base font-bold text-slate-900 leading-snug">
+                           {course.eligibility.minimum_qualifications}
+                        </div>
+                     )}
+                     {course.eligibility.gpa !== null && course.eligibility.gpa !== undefined && (
+                        <div className="text-sm text-slate-700">Minimum GPA: <span className="font-bold">{course.eligibility.gpa}</span></div>
+                     )}
+                     {course.eligibility.age_limit !== null && course.eligibility.age_limit !== undefined && (
+                        <div className="text-sm text-slate-700">Age Limit: <span className="font-bold">{course.eligibility.age_limit}</span></div>
+                     )}
+                     {course.eligibility.work_experience && (
+                        <div className="text-sm text-slate-700">Work Experience: <span className="font-bold">{course.eligibility.work_experience}</span></div>
+                     )}
+                     {Array.isArray(course.eligibility.other_requirements) && course.eligibility.other_requirements.length > 0 && (
+                        <div className="text-sm text-slate-700">
+                           Other Requirements:
+                           <ul className="list-disc ml-6">
+                              {course.eligibility.other_requirements.map((req: string, i: number) => (
+                                 <li key={i}>{req}</li>
+                              ))}
+                           </ul>
+                        </div>
+                     )}
+                  </div>
+               ) : (
+                  <div className="text-base font-bold text-slate-900 leading-snug">N/A</div>
+               )}
+            </section>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
 
@@ -137,50 +246,120 @@ const CourseDetail = () => {
 
                   <section className="reveal">
                      <h2 className="text-2xl font-bold text-slate-900 mb-6">Program Overview</h2>
-                     <p className="text-slate-600 leading-8 text-lg">
-                        {course.description}
-                     </p>
+                     <div className="mb-4">
+                        <div className="text-slate-600 leading-8 text-lg">
+                           {course.description || 'No description available.'}
+                        </div>
+                        {/* Program Code */}
+                        {course.program_code && (
+                           <div className="text-xs text-slate-500 mt-1">Program Code: {course.program_code}</div>
+                        )}
+                        {/* Academic Level */}
+                        {course.level && (
+                           <div className="text-xs text-slate-500 mt-1">Level: {course.level}</div>
+                        )}
+                        {/* Curriculum Summary */}
+                        {course.curriculum_summary && (
+                           <div className="text-xs text-slate-500 mt-1">{course.curriculum_summary}</div>
+                        )}
+                        {/* URL */}
+                        {course.url && (
+                           <div className="text-xs mt-2"><a href={course.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Official Program Page</a></div>
+                        )}
+                     </div>
+                     {/* Delivery Modes */}
+                     {Array.isArray(course.delivery_mode) && course.delivery_mode.length > 0 && (
+                        <div className="mb-2 flex flex-wrap gap-2">
+                           {course.delivery_mode.map((mode: string, i: number) => (
+                              <span key={i} className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded uppercase tracking-wider border border-blue-100">{mode}</span>
+                           ))}
+                        </div>
+                     )}
+                     {/* Specializations */}
+                     {Array.isArray(course.specializations) && course.specializations.length > 0 && (
+                        <div className="mb-2 flex flex-wrap gap-2">
+                           <span className="font-bold text-slate-700 mr-2">Specializations:</span>
+                           {course.specializations.map((spec: string, i: number) => (
+                              <span key={i} className="px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded uppercase tracking-wider border border-emerald-100">{spec}</span>
+                           ))}
+                        </div>
+                     )}
+                  </section>
+
+                  {/* Investment Section moved here */}
+                  <section className="reveal">
+                     <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                        <DollarSign size={22} className="text-emerald-500" /> Investment
+                     </h2>
+                     <div className="text-xl md:text-2xl font-bold text-slate-900 leading-tight">
+                        {typeof course.fees === 'string'
+                           ? (course.fees.includes('Free') ? 'Free (Government funded)' : course.fees)
+                           : (course.fees?.amount
+                              ? `${course.fees.amount} ${course.fees.currency || ''}`
+                              : 'See breakdown below')}
+                     </div>
+                     {course.fees?.period && (
+                        <div className="text-xs text-slate-500 mt-1">{course.fees.period}</div>
+                     )}
+                     {renderFeesBreakdown(course.fees?.breakdown)}
                   </section>
 
                   <section className="reveal">
                      <h2 className="text-2xl font-bold text-slate-900 mb-6">What You Will Learn</h2>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {course.whatYouLearn.map((item, i) => (
-                           <div key={i} className="flex items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-300 transition-colors">
-                              <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 flex-shrink-0">
-                                 <BookOpen size={20} />
+                        {/* Render whatYouLearn, curriculum_summary, or extensions.course_outline */}
+                        {Array.isArray(course.whatYouLearn) && course.whatYouLearn.length > 0 ? (
+                           course.whatYouLearn.map((item: string, i: number) => (
+                              <div key={i} className="flex items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-300 transition-colors">
+                                 <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 flex-shrink-0">
+                                    <BookOpen size={20} />
+                                 </div>
+                                 <span className="font-bold text-slate-700">{item}</span>
                               </div>
-                              <span className="font-bold text-slate-700">{item}</span>
-                           </div>
-                        ))}
+                           ))
+                        ) : course.curriculum_summary ? (
+                           <div className="text-slate-600">{course.curriculum_summary}</div>
+                        ) : Array.isArray(course.extensions?.course_outline) && course.extensions.course_outline.length > 0 ? (
+                           course.extensions.course_outline.map((sem: any, i: number) => (
+                              <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm col-span-1 md:col-span-2">
+                                 {Object.entries(sem).map(([semName, subjects]: any) => (
+                                    <div key={semName}>
+                                       <div className="font-bold text-blue-700 mb-2">{semName}</div>
+                                       <ul className="list-disc ml-6 text-slate-700">
+                                          {Array.isArray(subjects) && subjects.map((subj, j) => (
+                                             <li key={j}>{subj}</li>
+                                          ))}
+                                       </ul>
+                                    </div>
+                                 ))}
+                              </div>
+                           ))
+                        ) : (
+                           <div className="text-slate-400">No curriculum information available.</div>
+                        )}
                      </div>
                   </section>
 
                   {/* Detailed Institution Section (Added as per request) */}
                   <section className="reveal">
                      <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-                        <Building2 className="text-blue-600" /> About {institution.name}
+                        <Building2 className="text-blue-600" /> About {inst.name || 'Institution'}
                      </h2>
                      <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm">
                         <div className="flex flex-col md:flex-row gap-6 mb-6">
-                           <img src={institution.imageUrl} alt={institution.name} className="w-24 h-24 rounded-2xl object-cover shadow-md border border-slate-100" />
+                           <img src={inst.imageUrl} alt={inst.name} className="w-24 h-24 rounded-2xl object-cover shadow-md border border-slate-100" />
                            <div>
-                              <p className="text-slate-600 leading-relaxed mb-4">{institution.overview}</p>
+                              <p className="text-slate-600 leading-relaxed mb-4">{inst.description || inst.overview || 'No overview available.'}</p>
                               <div className="flex flex-wrap gap-4">
                                  <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl text-sm font-bold text-slate-700 border border-slate-100">
-                                    <Globe size={16} className="text-blue-500" /> {institution.type}
+                                    <Globe size={16} className="text-blue-500" /> {Array.isArray(inst.type) ? inst.type.join(', ') : inst.type || 'N/A'}
                                  </div>
-                                 <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl text-sm font-bold text-slate-700 border border-slate-100">
-                                    <Users size={16} className="text-emerald-500" /> {institution.studentCount} Students
-                                 </div>
-                                 <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl text-sm font-bold text-slate-700 border border-slate-100">
-                                    <Star size={16} className="text-amber-500 fill-current" /> {institution.rating} Rating
-                                 </div>
+                                 {/* Optionally add more institution info here if available */}
                               </div>
                            </div>
                         </div>
                         <Link
-                           to={`/institutions/${institution.id}`}
+                           to={`/institutions/${inst._id}`}
                            className="flex items-center justify-center w-full py-4 bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-600 font-bold rounded-xl border border-slate-200 hover:border-blue-200 transition-all group"
                         >
                            Visit Official University Profile <ChevronRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />
@@ -218,12 +397,15 @@ const CourseDetail = () => {
                         Career Paths
                      </h3>
                      <div className="space-y-3">
-                        {course.careerOpportunities.map((job, i) => (
-                           <div key={i} className="flex items-center bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-slate-600 transition-colors">
-                              <div className="w-2 h-2 rounded-full bg-blue-500 mr-3 shadow-[0_0_8px_rgba(59,130,246,0.6)]"></div>
-                              <span className="font-bold text-slate-200 text-sm">{job}</span>
-                           </div>
-                        ))}
+                        {Array.isArray(course.careerOpportunities)
+                           ? course.careerOpportunities.map((job, i) => (
+                              <div key={i} className="flex items-center bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-slate-600 transition-colors">
+                                 <div className="w-2 h-2 rounded-full bg-blue-500 mr-3 shadow-[0_0_8px_rgba(59,130,246,0.6)]"></div>
+                                 <span className="font-bold text-slate-200 text-sm">{job}</span>
+                              </div>
+                           ))
+                           : <div className="text-slate-400">No career opportunities listed.</div>
+                        }
                      </div>
                   </div>
 
@@ -231,18 +413,42 @@ const CourseDetail = () => {
                   <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm reveal reveal-delay-300">
                      <h4 className="font-bold text-slate-900 text-lg mb-4">Contact Admissions</h4>
                      <div className="space-y-4 text-sm text-slate-600">
-                        <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl">
-                           <MapPin size={18} className="text-blue-600" />
-                           <span>{institution.location}</span>
-                        </div>
-                        <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl">
-                           <Globe size={18} className="text-blue-600" />
-                           <span>{institution.contact.website}</span>
-                        </div>
+                        {/* Address/location */}
+                        {(inst.location || inst.country) && (
+                           <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl">
+                              <MapPin size={18} className="text-blue-600" />
+                              <span>{inst.location || inst.country}</span>
+                           </div>
+                        )}
+                        {/* Institution website */}
+                        {(inst.contact?.website || inst.website) && (
+                           <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl">
+                              <Globe size={18} className="text-blue-600" />
+                              <a href={inst.contact?.website || inst.website} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline break-all">
+                                 {inst.contact?.website || inst.website}
+                              </a>
+                           </div>
+                        )}
+                        {/* Program-specific application URL */}
+                        {course.url && (
+                           <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl">
+                              <DollarSign size={18} className="text-emerald-600" />
+                              <a href={course.url} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline break-all">
+                                 Apply Online
+                              </a>
+                           </div>
+                        )}
+                        {/* Fallback if no contact info */}
+                        {!(inst.location || inst.country || inst.contact?.website || inst.website || course.url) && (
+                           <div className="text-slate-400">No contact information available.</div>
+                        )}
                      </div>
-                     <button onClick={() => setShowApplyModal(true)} className="w-full mt-6 py-3 border-2 border-blue-600 text-blue-600 rounded-xl font-bold hover:bg-blue-600 hover:text-white transition-all">
-                        Enquire Directly
-                     </button>
+                     {/* Only show Enquire Directly if no program url */}
+                     {!course.url && (
+                        <button onClick={() => setShowApplyModal(true)} className="w-full mt-6 py-3 border-2 border-blue-600 text-blue-600 rounded-xl font-bold hover:bg-blue-600 hover:text-white transition-all">
+                           Enquire Directly
+                        </button>
+                     )}
                   </div>
 
                </div>
