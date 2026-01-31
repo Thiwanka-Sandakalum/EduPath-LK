@@ -3,7 +3,7 @@ import { MessageCircle, X, Send, User, Bot, Sparkles, Zap, Smartphone, RefreshCw
 import { ChatMessage } from '../../../../types';
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const ChatWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -39,30 +39,30 @@ const ChatWidget = () => {
     setIsTyping(true);
 
     try {
-      const result = await ai.models.generateContentStream({
-        model: 'gemini-3-flash-preview',
-        contents: [
-          ...messages.slice(-6).map(m => ({
-            role: m.role === 'bot' ? 'model' : 'user',
-            parts: [{ text: m.text }]
-          })),
-          { role: 'user', parts: [{ text: currentInput }] }
-        ],
-        config: {
-          systemInstruction: "You are the EduPath LK Advisor. Help students find courses, universities (Government and Private), and scholarships in Sri Lanka. Be concise, professional, and friendly. Use formatting to make data easy to read."
-        }
-      });
+      // const result = await ai.models.generateContentStream({
+      //   model: 'gemini-3-flash-preview',
+      //   contents: [
+      //     ...messages.slice(-6).map(m => ({
+      //       role: m.role === 'bot' ? 'model' : 'user',
+      //       parts: [{ text: m.text }]
+      //     })),
+      //     { role: 'user', parts: [{ text: currentInput }] }
+      //   ],
+      //   config: {
+      //     systemInstruction: "You are the EduPath LK Advisor. Help students find courses, universities (Government and Private), and scholarships in Sri Lanka. Be concise, professional, and friendly. Use formatting to make data easy to read."
+      //   }
+      // });
 
       let botText = "";
       const botMsgId = (Date.now() + 1).toString();
       setMessages(prev => [...prev, { id: botMsgId, role: 'bot', text: "" }]);
 
-      for await (const chunk of result) {
-        botText += chunk.text;
-        setMessages(prev =>
-          prev.map(m => m.id === botMsgId ? { ...m, text: botText } : m)
-        );
-      }
+      // for await (const chunk of result) {
+      //   botText += chunk.text;
+      //   setMessages(prev =>
+      //     prev.map(m => m.id === botMsgId ? { ...m, text: botText } : m)
+      //   );
+      // }
     } catch (error) {
       console.error("AI Error:", error);
       setMessages(prev => [...prev, {
@@ -122,8 +122,8 @@ const ChatWidget = () => {
                   {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
                 </div>
                 <div className={`max-w-[85%] rounded-3xl p-4 text-sm leading-relaxed shadow-soft ${msg.role === 'user'
-                    ? 'bg-primary-600 text-white rounded-tr-none font-bold'
-                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-tl-none font-medium'
+                  ? 'bg-primary-600 text-white rounded-tr-none font-bold'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-tl-none font-medium'
                   }`}>
                   {msg.text ? <div className="whitespace-pre-wrap">{msg.text}</div> : <div className="flex gap-1 py-1.5"><div className="w-1.5 h-1.5 bg-primary-500 rounded-full animate-bounce"></div><div className="w-1.5 h-1.5 bg-primary-500/70 rounded-full animate-bounce delay-75"></div><div className="w-1.5 h-1.5 bg-primary-500/40 rounded-full animate-bounce delay-150"></div></div>}
                 </div>

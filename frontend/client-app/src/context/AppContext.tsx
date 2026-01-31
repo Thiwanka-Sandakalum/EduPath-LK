@@ -12,13 +12,10 @@ interface RegisteredUser extends UserProfile {
 interface AppState {
   language: Language;
   setLanguage: (lang: Language) => void;
-  
-  // Theme
   theme: ThemeColor;
   setTheme: (theme: ThemeColor) => void;
   darkMode: boolean;
   toggleDarkMode: () => void;
-
   savedInstitutions: string[];
   toggleSavedInstitution: (id: string) => void;
   applications: UserApplication[];
@@ -27,20 +24,9 @@ interface AppState {
   addInquiry: (inquiry: UserInquiry) => void;
   recentlyViewed: string[];
   addRecentlyViewed: (id: string) => void;
-  
-  // Chat
   chatSessions: ChatSession[];
   saveChatSession: (session: ChatSession) => void;
   deleteChatSession: (id: string) => void;
-  
-  user: UserProfile | null;
-  login: (email: string, password?: string) => Promise<boolean>; // Returns success/fail
-  googleLogin: (userData: Partial<UserProfile>) => void;
-  register: (userData: RegisteredUser) => Promise<boolean>;
-  logout: () => void;
-  updateUser: (data: Partial<UserProfile>) => void;
-  
-  registeredUsers: RegisteredUser[];
 }
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -63,16 +49,16 @@ const THEMES: Record<ThemeColor, any> = {
 
 export const AppProvider = ({ children }: { children?: ReactNode }) => {
   // --- State Initialization ---
-  
-  const [language, setLanguage] = useState<Language>(() => 
+
+  const [language, setLanguage] = useState<Language>(() =>
     (localStorage.getItem('eduPath_lang') as Language) || 'en'
   );
 
-  const [theme, setThemeState] = useState<ThemeColor>(() => 
+  const [theme, setThemeState] = useState<ThemeColor>(() =>
     (localStorage.getItem('eduPath_theme') as ThemeColor) || 'blue'
   );
 
-  const [darkMode, setDarkMode] = useState<boolean>(() => 
+  const [darkMode, setDarkMode] = useState<boolean>(() =>
     localStorage.getItem('eduPath_dark') === 'true'
   );
 
@@ -119,19 +105,19 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     }];
   });
 
-  const [savedInstitutions, setSavedInstitutions] = useState<string[]>(() => 
+  const [savedInstitutions, setSavedInstitutions] = useState<string[]>(() =>
     JSON.parse(localStorage.getItem('eduPath_saved') || '[]')
   );
-  
-  const [applications, setApplications] = useState<UserApplication[]>(() => 
+
+  const [applications, setApplications] = useState<UserApplication[]>(() =>
     JSON.parse(localStorage.getItem('eduPath_applications') || '[]')
   );
 
-  const [inquiries, setInquiries] = useState<UserInquiry[]>(() => 
+  const [inquiries, setInquiries] = useState<UserInquiry[]>(() =>
     JSON.parse(localStorage.getItem('eduPath_inquiries') || '[]')
   );
 
-  const [recentlyViewed, setRecentlyViewed] = useState<string[]>(() => 
+  const [recentlyViewed, setRecentlyViewed] = useState<string[]>(() =>
     JSON.parse(localStorage.getItem('eduPath_recent') || '[]')
   );
 
@@ -152,13 +138,10 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     return [];
   });
 
-  const [user, setUser] = useState<UserProfile | null>(() => {
-    const saved = localStorage.getItem('eduPath_user');
-    return saved ? JSON.parse(saved) : null;
-  });
+
 
   // --- Persistence Effects ---
-  
+
   useEffect(() => localStorage.setItem('eduPath_lang', language), [language]);
   useEffect(() => localStorage.setItem('eduPath_theme', theme), [theme]);
   useEffect(() => localStorage.setItem('eduPath_dark', String(darkMode)), [darkMode]);
@@ -168,13 +151,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   useEffect(() => localStorage.setItem('eduPath_inquiries', JSON.stringify(inquiries)), [inquiries]);
   useEffect(() => localStorage.setItem('eduPath_recent', JSON.stringify(recentlyViewed)), [recentlyViewed]);
   useEffect(() => localStorage.setItem('eduPath_chats', JSON.stringify(chatSessions)), [chatSessions]);
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem('eduPath_user', JSON.stringify(user));
-    } else {
-      localStorage.removeItem('eduPath_user');
-    }
-  }, [user]);
+
 
   // Apply Theme CSS Variables
   useEffect(() => {
@@ -209,7 +186,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   // --- Logic ---
 
   const toggleSavedInstitution = useCallback((id: string) => {
-    setSavedInstitutions(prev => 
+    setSavedInstitutions(prev =>
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
   }, []);
@@ -246,77 +223,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     setChatSessions(prev => prev.filter(s => s.id !== id));
   }, []);
 
-  const register = useCallback(async (newUser: RegisteredUser) => {
-    // Check if email already exists
-    if (registeredUsers.some(u => u.email === newUser.email)) {
-      return false; // Email taken
-    }
-    
-    // Assign default avatar if none
-    const userWithAvatar = {
-      ...newUser,
-      avatarUrl: newUser.avatarUrl || `https://ui-avatars.com/api/?name=${newUser.name}&background=random`,
-      provider: 'email' as const
-    };
 
-    setRegisteredUsers(prev => [...prev, userWithAvatar]);
-    // Auto login after register
-    const { password, ...safeUser } = userWithAvatar;
-    setUser(safeUser);
-    return true;
-  }, [registeredUsers]);
-
-  const login = useCallback(async (email: string, password?: string) => {
-    const foundUser = registeredUsers.find(u => u.email === email && u.password === password);
-    
-    if (foundUser) {
-      const { password, ...safeUser } = foundUser;
-      setUser(safeUser);
-      return true;
-    }
-    return false;
-  }, [registeredUsers]);
-
-  const googleLogin = useCallback((userData: Partial<UserProfile>) => {
-    // Check if this google user exists in registry by email, if so, log them in
-    // If not, register them without a password (social login)
-    const existing = registeredUsers.find(u => u.email === userData.email);
-    
-    if (existing) {
-       const { password, ...safeUser } = existing;
-       // Ensure provider is set if missing on legacy data
-       if (!safeUser.provider) safeUser.provider = 'google';
-       setUser(safeUser);
-    } else {
-       // Register new google user
-       const newUser: RegisteredUser = {
-         name: userData.name || 'User',
-         email: userData.email || '',
-         avatarUrl: userData.avatarUrl,
-         provider: 'google'
-       };
-       setRegisteredUsers(prev => [...prev, newUser]);
-       setUser(newUser);
-    }
-  }, [registeredUsers]);
-
-  const logout = useCallback(() => {
-    setUser(null);
-  }, []);
-
-  const updateUser = useCallback((data: Partial<UserProfile>) => {
-    setUser(prev => {
-      if (!prev) return null;
-      const updated = { ...prev, ...data };
-      
-      // Also update the registry so data persists on next login
-      setRegisteredUsers(currentUsers => 
-        currentUsers.map(u => u.email === prev.email ? { ...u, ...data } : u)
-      );
-      
-      return updated;
-    });
-  }, []);
 
   return (
     <AppContext.Provider value={{
@@ -337,13 +244,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       chatSessions,
       saveChatSession,
       deleteChatSession,
-      user,
-      login,
-      googleLogin,
-      register,
-      logout,
-      updateUser,
-      registeredUsers
     }}>
       {children}
     </AppContext.Provider>

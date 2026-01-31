@@ -1,0 +1,1 @@
+// UserContext removed. Clerk now handles authentication and user state.
