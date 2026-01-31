@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { ProgramsService } from '../../../types/services/ProgramsService';
+
 import { InstitutionsService } from '../../../types/services/InstitutionsService';
 import { ArrowRight, Search, BookOpen, MapPin, ChevronDown } from 'lucide-react';
 
