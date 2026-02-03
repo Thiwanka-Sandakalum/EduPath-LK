@@ -1,9 +1,0 @@
-{
-  "name": "Copy of EduPath LK",
-  "description": "A comprehensive education discovery platform for Sri Lanka featuring institutions, courses, scholarships, and an AI-powered guide.",
-  "requestFramePermissions": [
-    "camera",
-    "microphone",
-    "geolocation"
-  ]
-}
