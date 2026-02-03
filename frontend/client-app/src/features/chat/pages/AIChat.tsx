@@ -1,15 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Send, Bot, User, Trash2, Plus, MessageSquare, Sparkles, RefreshCw, PanelLeftClose, PanelLeftOpen, Terminal, ExternalLink } from 'lucide-react';
+import { Send, Bot, User, Plus, Sparkles, RefreshCw, PanelLeftClose, PanelLeftOpen, Terminal, ExternalLink } from 'lucide-react';
 import { useAppStore } from '../../../context/AppContext';
 import type { ChatSession, ChatMessage } from '../../../types/chat';
-import { GoogleGenAI } from "@google/genai";
 
-// const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+import ReactMarkdown from 'react-markdown';
+import { DefaultService } from '../../../../services/chat';
 
-const SYSTEM_INSTRUCTION = `You are the EduPath LK Assistant, an expert educational consultant for Sri Lanka.
-Use Google Search grounding to provide the LATEST scholarship deadlines, university rankings, and UGC updates.
-Be concise and professional. If you use external information, the system will automatically handle the URLs.`;
 
 type CourseChatContext = {
   courseId: string;
@@ -54,30 +51,9 @@ const getContextForSession = (sessionId: string | null): CourseChatContext | nul
   return ctx && typeof ctx === 'object' ? ctx : null;
 };
 
-const buildCourseContextInstruction = (ctx: CourseChatContext) => {
-  const lines: string[] = [];
-  lines.push('You are currently helping the user with questions about a specific course from EduPath LK.');
-  lines.push('Use ONLY the following course context as the authoritative course data (unless user explicitly asks for general information):');
-  lines.push(`Course ID: ${ctx.courseId}`);
-  lines.push(`Course Title: ${ctx.title}`);
-  if (ctx.classification) lines.push(`Classification: ${ctx.classification}`);
-  if (ctx.level) lines.push(`Level: ${ctx.level}`);
-  if (ctx.field) lines.push(`Field/Stream: ${ctx.field}`);
-  if (ctx.institutionName) lines.push(`Institution: ${ctx.institutionName}${ctx.institutionId ? ` (${ctx.institutionId})` : ''}`);
-  if (ctx.description) lines.push(`Description: ${ctx.description}`);
-  if (Array.isArray(ctx.governmentOfferings) && ctx.governmentOfferings.length) {
-    lines.push('Government Offerings (Universities):');
-    for (const o of ctx.governmentOfferings.slice(0, 30)) {
-      lines.push(`- ${o.universityName} (${o.universityId})${o.academicYear ? ` | Year: ${o.academicYear}` : ''}${typeof o.proposedIntake === 'number' ? ` | Intake: ${o.proposedIntake}` : ''}`);
-    }
-  }
-  lines.push('When the user asks questions, answer directly and include relevant facts from this context.');
-  lines.push('If the user asks something not covered by the context, ask a short clarifying question or say what info is missing.');
-  return lines.join('\n');
-};
 
 const AIChat = () => {
-  const { user, chatSessions, saveChatSession, deleteChatSession } = useAppStore();
+  const { chatSessions, saveChatSession } = useAppStore();
   const location = useLocation();
   const [input, setInput] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -87,8 +63,6 @@ const AIChat = () => {
 
   const [activeCourseContext, setActiveCourseContext] = useState<CourseChatContext | null>(null);
 
-  const apiKey = (import.meta as any)?.env?.VITE_GEMINI_API_KEY as string | undefined;
-  const modelName = ((import.meta as any)?.env?.VITE_GEMINI_MODEL as string | undefined) || 'gemini-1.5-flash';
 
   const [activeSessionId, setActiveSessionId] = useState<string | null>(() =>
     chatSessions.length > 0 ? chatSessions[0].id : null
@@ -173,66 +147,35 @@ const AIChat = () => {
 
     const updatedMessages = [...currentSession.messages, userMsg];
     saveChatSession({ ...currentSession, messages: updatedMessages });
-    const userPrompt = input;
     setInput('');
     setIsTyping(true);
     setCurrentSources([]);
 
     try {
-      if (!apiKey || !apiKey.trim()) {
-        const botMsg: ChatMessage = {
-          id: (Date.now() + 2).toString(),
-          role: 'bot',
-          text: 'AI is not configured. Set VITE_GEMINI_API_KEY in frontend/client-app and restart the dev server.',
-          timestamp: new Date(),
-        };
-        saveChatSession({
-          ...currentSession,
-          messages: [...updatedMessages, botMsg]
-        });
-        return;
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
       const botMsgId = (Date.now() + 2).toString();
       saveChatSession({
         ...currentSession,
         messages: [...updatedMessages, { id: botMsgId, role: 'bot', text: '', timestamp: new Date() }]
       });
 
-      const ctx = getContextForSession(sessionId);
-      const systemInstruction = ctx ? `${SYSTEM_INSTRUCTION}\n\n${buildCourseContextInstruction(ctx)}` : SYSTEM_INSTRUCTION;
-
-      const history = updatedMessages.slice(-10).map(m => ({
-        role: m.role === 'bot' ? 'model' : 'user',
-        parts: [{ text: m.text }]
-      }));
-
-      const result = await ai.models.generateContentStream({
-        model: modelName,
-        contents: [
-          ...history,
-          { role: 'user', parts: [{ text: userPrompt }] }
-        ],
-        config: {
-          systemInstruction,
-        }
+      // Call the chat API with only the question
+      const response = await DefaultService.qaEndpointQaPost({ question: input });
+      const botText = response?.answer || 'No response from AI.';
+      saveChatSession({
+        ...currentSession,
+        messages: [...updatedMessages, { id: botMsgId, role: 'bot', text: botText, timestamp: new Date() }]
       });
 
-      let botText = '';
-      for await (const chunk of result) {
-        botText += chunk.text;
-        saveChatSession({
-          ...currentSession,
-          messages: [...updatedMessages, { id: botMsgId, role: 'bot', text: botText, timestamp: new Date() }]
-        });
+      // Optionally handle source if provided
+      if (response?.source) {
+        setCurrentSources([{ title: response.source, uri: response.source }]);
       }
 
     } catch (error) {
-      console.error("Gemini Error:", error);
+      console.error("Chat Service Error:", error);
       saveChatSession({
         ...currentSession,
-        messages: [...updatedMessages, { id: 'err', role: 'bot', text: "Connectivity issue. Please check your network and try again.", timestamp: new Date() }]
+        messages: [...updatedMessages, { id: 'err' + Date.now(), role: 'bot', text: "Connectivity issue. Please check your network and try again.", timestamp: new Date() }]
       });
     } finally {
       setIsTyping(false);
@@ -334,7 +277,12 @@ const AIChat = () => {
                   </div>
                   <div className="max-w-[85%] space-y-2">
                     <div className={`px-6 py-4 rounded-3xl text-[15px] leading-relaxed shadow-premium ${msg.role === 'user' ? 'bg-slate-900 text-white rounded-tr-none' : 'bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-tl-none font-medium'}`}>
-                      {msg.text || (isTyping && i === activeSession.messages.length - 1 ? <div className="flex gap-1 py-1.5"><div className="w-2 h-2 bg-primary-400 rounded-full animate-bounce"></div><div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce delay-100"></div><div className="w-2 h-2 bg-primary-600 rounded-full animate-bounce delay-200"></div></div> : null)}
+                      {msg.role === 'bot' ? (
+                        <ReactMarkdown>{msg.text || ''}</ReactMarkdown>
+                      ) : (
+                        msg.text
+                      )}
+                      {(isTyping && i === activeSession.messages.length - 1) ? <div className="flex gap-1 py-1.5"><div className="w-2 h-2 bg-primary-400 rounded-full animate-bounce"></div><div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce delay-100"></div><div className="w-2 h-2 bg-primary-600 rounded-full animate-bounce delay-200"></div></div> : null}
                     </div>
                     {msg.role === 'bot' && currentSources.length > 0 && i === activeSession.messages.length - 1 && (
                       <div className="flex flex-wrap gap-2 pt-2">

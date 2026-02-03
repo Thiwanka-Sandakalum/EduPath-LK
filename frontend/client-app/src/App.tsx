@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-
 import { AppProvider } from './context/AppContext';
 import Navbar from './components/layout/Navbar/Navbar';
 import ChatWidget from './features/chat/components/ChatWidget/ChatWidget';
-
 import Home from './pages/HomePage';
 import InstitutionsPage from './features/institutions/pages/InstitutionsPage';
 import InstitutionDetail from './features/institutions/components/InstitutionDetail/InstitutionDetail';
