@@ -3,10 +3,14 @@ import { useLocation } from 'react-router-dom';
 
 const MainLayout = ({ children }: { children?: React.ReactNode }) => {
     const location = useLocation();
-    const transparentPaths = ['/', '/institutions', '/courses', '/scholarships', '/tools', '/blog'];
+    const transparentPaths = ['/', '/institutions', '/courses', '/scholarships', '/tools', '/blog', '/loans', '/faq', '/about', '/contact'];
+    const transparentPathPrefixes = ['/institutions/', '/courses/', '/blog/'];
     const searchParams = new URLSearchParams(location.search);
     const isToolSubView = location.pathname === '/tools' && searchParams.has('tool');
-    const isHeroPath = transparentPaths.includes(location.pathname) && !isToolSubView;
+    const isHeroPath = !isToolSubView && (
+        transparentPaths.includes(location.pathname) ||
+        transparentPathPrefixes.some((prefix) => location.pathname.startsWith(prefix))
+    );
     const isChatPath = location.pathname === '/chat';
 
     return (

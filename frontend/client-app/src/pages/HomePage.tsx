@@ -10,29 +10,76 @@ import {
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { institutions } from '../data/mockData';
+import { InstitutionsService } from '../types/services/InstitutionsService';
+import { ProgramsService } from '../types/services/ProgramsService';
+import type { Institution as ApiInstitution } from '../types/models/Institution';
 
 // const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const originalSlides = [
-  { id: 1, image: "https://images.unsplash.com/photo-1562774053-701939374585?q=80&w=2070", title: "Scale Your Potential", subtitle: "Access world-class educational opportunities through Sri Lanka's most comprehensive academic directory." },
-  { id: 2, image: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=2070", title: "Navigate Success", subtitle: "Connecting ambitious students with elite universities and life-changing scholarship programs." }
+  { id: 1, image: "https://blog.tuf.edu.pk/wp-content/uploads/2023/06/1200x800-1-864x576.jpg", title: "Scale Your Potential", subtitle: "Access world-class educational opportunities through Sri Lanka's most comprehensive academic directory." },
+  { id: 2, image: "https://img.freepik.com/premium-photo/portrait-group-indian-students-graduation-gowns-holding-diplomas_979520-62999.jpg", title: "Navigate Success", subtitle: "Connecting ambitious students with elite universities and life-changing scholarship programs." },
+  { id: 3, image: "https://www.nsbm.ac.lk/wp-content/uploads/2023/07/WEB-banners-Undergraduates.jpg", title: "Learn Without Limits", subtitle: "Access information about universities, scholarships, and programs in one powerful platform." },
+  { id: 4, image: "https://web-cdn.meridianuniversity.edu/site-content-images/content-library/is-a-psyd-degree-worth-it-insights-into-psychology-careers-image-two.webp", title: "Empower Your Journey", subtitle: "Discover your ideal academic path with personalized recommendations and expert insights." },
 ];
 
 const popularCategories = [
-  { id: 1, title: "State Universities", desc: "UGC funded excellence", icon: <Building2 className="text-primary-600" />, link: "/institutions?type=Government" },
+  { id: 1, title: "Government Universities", desc: "UGC funded excellence", icon: <Building2 className="text-primary-600" />, link: "/institutions?type=Government" },
   { id: 2, title: "Private Institutes", desc: "Modern facilities", icon: <Zap className="text-amber-500" />, link: "/institutions?type=Private" },
-  { id: 3, title: "Vocational Skills", desc: "Technical mastery", icon: <Activity className="text-emerald-500" />, link: "/institutions?type=Vocational" },
-  { id: 4, title: "IT & Software", desc: "Tech future", icon: <BrainCircuit className="text-indigo-500" />, link: "/courses?field=IT" },
+  { id: 3, title: "Business & Management", desc: "Leadership and entrepreneurship", icon: <Activity className="text-emerald-500" />, link: "/courses?q=Business" },
+  { id: 4, title: "IT & Software", desc: "Tech future", icon: <BrainCircuit className="text-indigo-500" />, link: "/courses?q=Software" },
 ];
 
 const gradePoints: Record<string, number> = { 'A': 3.0, 'B': 2.5, 'C': 2.0, 'S': 1.0, 'F': 0 };
 
+const ARTS_MAJOR_SUBJECTS = [
+  'Economics',
+  'Geography',
+  'History',
+  'Home Economics',
+  'Accounting',
+  'Business Statistics',
+  'Elements of Political Science',
+  'Logic & Scientific Method',
+  'Higher Mathematics',
+  'Agricultural Science',
+  'Mathematics',
+  'Combined Mathematics',
+  'Communication & Media Studies',
+  'Information & Communication Technology',
+] as const;
+
+const ARTS_THIRD_SUBJECTS = [
+  'Civil Technology',
+  'Mechanical Technology',
+  'Electronic and Information Technology',
+  'Food Technology',
+  'Agro Technology',
+  'Bio-Resource Technology',
+  'Buddhism',
+  'Hinduism',
+  'Christianity',
+  'Islam',
+  'Greek & Roman Civilization',
+] as const;
+
+type ArtsMajorSubject = (typeof ARTS_MAJOR_SUBJECTS)[number];
+type ArtsThirdSubject = (typeof ARTS_THIRD_SUBJECTS)[number];
+
+const STREAM_PROGRAM_KEYWORDS: Record<string, string[]> = {
+  physical: ['Engineering', 'Computer', 'Software', 'Data', 'ICT', 'Mathematics', 'Physics'],
+  bio: ['Medicine', 'Medical', 'Nursing', 'Pharmacy', 'Biomedical', 'Biotechnology', 'Biology'],
+  commerce: ['Business', 'Management', 'Accounting', 'Finance', 'Marketing', 'Economics'],
+  tech: ['Technology', 'Engineering', 'Mechatronics', 'Industrial', 'ICT', 'Information'],
+  arts: ['Law', 'Arts', 'Humanities', 'Social', 'Media', 'Communication', 'Political', 'History'],
+};
+
 const STREAMS = [
   { id: 'physical', name: 'Physical Science', subjects: ['Combined Maths', 'Physics', 'Chemistry'], careers: ['Software Engineer', 'Civil Engineer', 'Data Scientist'] },
-  { id: 'bio', name: 'Biological Science', subjects: ['Biology', 'Physics', 'Chemistry'], careers: ['Medical Doctor', 'Biotechnologist', 'Pharmacist'] },
-  { id: 'commerce', name: 'Commerce', subjects: ['Economics', 'Business Studies', 'Accounting'], careers: ['Chartered Accountant', 'Financial Analyst', 'Marketing Strategist'] },
+  { id: 'bio', name: 'Biological Science', subjects: ['Biology', 'Chemistry', 'Physics'], careers: ['Medical Doctor', 'Biotechnologist', 'Pharmacist'] },
+  { id: 'commerce', name: 'Commerce', subjects: ['Accounting', 'Business Studies', 'Economics'], careers: ['Chartered Accountant', 'Financial Analyst', 'Marketing Strategist'] },
   { id: 'arts', name: 'Arts', subjects: ['Main Subject 1', 'Main Subject 2', 'Main Subject 3'], careers: ['Legal Consultant', 'Diplomat', 'Journalist'] },
-  { id: 'tech', name: 'Technology', subjects: ['ET/SFT', 'BST', 'SFT/Science'], careers: ['Product Designer', 'Mechatronics Specialist', 'IT Project Manager'] }
+  { id: 'tech', name: 'Technology', subjects: ['Science for Technology', 'Engineering Technology', 'ICT'], careers: ['Product Designer', 'Mechatronics Specialist', 'IT Project Manager'] }
 ];
 
 const Home = () => {
@@ -40,18 +87,182 @@ const Home = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentSlide, setCurrentSlide] = useState(0);
 
+  const [institutionIndex, setInstitutionIndex] = useState<Array<{ nameLower: string }>>([]);
+  const [institutionIndexLoaded, setInstitutionIndexLoaded] = useState(false);
+  const [apiInstitutions, setApiInstitutions] = useState<ApiInstitution[]>([]);
+
   const [selectedStreamId, setSelectedStreamId] = useState(STREAMS[0].id);
   const [results, setResults] = useState<string[]>(['', '', '']);
   const [calculatedZ, setCalculatedZ] = useState<number | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
+
+  const [matchedInstitutions, setMatchedInstitutions] = useState<ApiInstitution[]>([]);
+  const [loadingMatches, setLoadingMatches] = useState(false);
+
+  const [physicalThirdSubject, setPhysicalThirdSubject] = useState<'Chemistry' | 'ICT'>('Chemistry');
+  const [bioThirdSubject, setBioThirdSubject] = useState<'Physics' | 'Agriculture'>('Physics');
+  const [commerceSecondSubject, setCommerceSecondSubject] = useState<'Business Studies' | 'ICT'>('Business Studies');
+  const [commerceThirdSubject, setCommerceThirdSubject] = useState<'Economics' | 'Business Statistics' | 'ICT'>('Economics');
+  const [techSecondSubject, setTechSecondSubject] = useState<'Bio System Technology' | 'Engineering Technology'>('Engineering Technology');
+  const [techThirdSubject, setTechThirdSubject] = useState<'Agriculture' | 'Geography' | 'Business Studies' | 'ICT'>('ICT');
+
+  const [artsFirstSubject, setArtsFirstSubject] = useState<ArtsMajorSubject>(ARTS_MAJOR_SUBJECTS[0]);
+  const [artsSecondSubject, setArtsSecondSubject] = useState<ArtsMajorSubject>(ARTS_MAJOR_SUBJECTS[1]);
+  const [artsThirdSubject, setArtsThirdSubject] = useState<ArtsThirdSubject>(ARTS_THIRD_SUBJECTS[0]);
 
   const [aiInsights, setAiInsights] = useState<{ title: string, content: string }[]>([]);
   const [loadingInsights, setLoadingInsights] = useState(true);
 
   const selectedStream = STREAMS.find(s => s.id === selectedStreamId) || STREAMS[0];
 
+  const selectedSubjects = selectedStreamId === 'physical'
+    ? ['Combined Maths', 'Physics', physicalThirdSubject]
+    : selectedStreamId === 'bio'
+      ? ['Biology', 'Chemistry', bioThirdSubject]
+      : selectedStreamId === 'commerce'
+        ? ['Accounting', commerceSecondSubject, commerceThirdSubject]
+        : selectedStreamId === 'tech'
+          ? ['Science for Technology', techSecondSubject, techThirdSubject]
+          : selectedStreamId === 'arts'
+            ? [artsFirstSubject, artsSecondSubject, artsThirdSubject]
+      : selectedStream.subjects;
+
+  const homeInstitutions = institutions as unknown as Array<{
+    id?: string;
+    _id?: string;
+    name: string;
+    type?: string | string[];
+    district?: string;
+    location?: string;
+    imageUrl?: string;
+    description?: string;
+  }>;
+
   useEffect(() => {
-    const timer = setInterval(() => setCurrentSlide((p) => (p + 1) % originalSlides.length), 8000);
+    let cancelled = false;
+    const loadInstitutionsIndex = async () => {
+      try {
+        const limit = 200;
+        const first = await InstitutionsService.listInstitutions(1, limit);
+        if (cancelled) return;
+
+        const all = [...(first.data ?? [])];
+        const totalPages = first.pagination?.total_pages ?? 1;
+        const maxPagesToFetch = 10;
+        const pagesToFetch = Math.min(totalPages, maxPagesToFetch);
+        for (let page = 2; page <= pagesToFetch; page++) {
+          const res = await InstitutionsService.listInstitutions(page, limit);
+          if (cancelled) return;
+          all.push(...(res.data ?? []));
+        }
+
+        setApiInstitutions(all as ApiInstitution[]);
+
+        const idx = all
+          .map((inst) => ({ nameLower: (inst.name ?? '').toLowerCase() }))
+          .filter((x) => x.nameLower);
+
+        setInstitutionIndex(idx);
+        setInstitutionIndexLoaded(true);
+      } catch {
+        if (!cancelled) {
+          setInstitutionIndex([]);
+          setInstitutionIndexLoaded(false);
+          setApiInstitutions([]);
+        }
+      }
+    };
+    loadInstitutionsIndex();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const computeMatches = async () => {
+      if (!calculatedZ) {
+        setMatchedInstitutions([]);
+        setLoadingMatches(false);
+        return;
+      }
+
+      if (apiInstitutions.length === 0) {
+        setMatchedInstitutions([]);
+        setLoadingMatches(false);
+        return;
+      }
+
+      setLoadingMatches(true);
+      try {
+        const keywords = STREAM_PROGRAM_KEYWORDS[selectedStreamId] ?? [];
+
+        const institutionById = new Map<string, ApiInstitution>();
+        for (const inst of apiInstitutions) {
+          institutionById.set(inst._id, inst);
+        }
+
+        const programResponses = await Promise.all(
+          keywords.map(async (kw) => {
+            try {
+              return await ProgramsService.listPrograms(1, 30, undefined, kw);
+            } catch {
+              return { data: [] as any[] };
+            }
+          })
+        );
+
+        const scores = new Map<string, number>();
+        for (const res of programResponses) {
+          for (const p of res.data ?? []) {
+            const instId = (p as any).institution_id as string | undefined;
+            if (!instId) continue;
+            if (!institutionById.has(instId)) continue;
+            scores.set(instId, (scores.get(instId) ?? 0) + 1);
+          }
+        }
+
+        const scoredInstitutions: Array<{ inst: ApiInstitution; score: number }> = Array.from(scores.entries())
+          .map(([id, score]) => ({ inst: institutionById.get(id)!, score }))
+          .filter((x) => Boolean(x.inst))
+          .sort((a, b) => b.score - a.score || a.inst.name.localeCompare(b.inst.name));
+
+        let next = scoredInstitutions.slice(0, 3).map((x) => x.inst);
+
+        // Fallback: if no stream program matches, show universities by Z-score tier.
+        if (next.length === 0) {
+          const universities = apiInstitutions.filter((inst) => (inst.type ?? []).some((t) => String(t).toLowerCase().includes('university')));
+          const pool = universities.length ? universities : apiInstitutions;
+
+          const sortedByConfidence = [...pool].sort((a, b) => (b.confidence_score ?? 0) - (a.confidence_score ?? 0) || a.name.localeCompare(b.name));
+
+          // Keep your previous tier idea but use real institutions.
+          if (calculatedZ > 1.9) next = sortedByConfidence.slice(0, 3);
+          else if (calculatedZ > 1.3) next = sortedByConfidence.slice(0, 3);
+          else next = sortedByConfidence.slice(0, 3);
+        }
+
+        if (!cancelled) setMatchedInstitutions(next);
+      } finally {
+        if (!cancelled) setLoadingMatches(false);
+      }
+    };
+
+    computeMatches();
+    return () => {
+      cancelled = true;
+    };
+  }, [calculatedZ, selectedStreamId, apiInstitutions]);
+
+  useEffect(() => {
+    // Only set up the timer once
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => {
+        // Ensure cycling through all slides
+        const next = prev + 1;
+        return next >= originalSlides.length ? 0 : next;
+      });
+    }, 4000); // 4 seconds for faster transitions
     return () => clearInterval(timer);
   }, []);
 
@@ -106,21 +317,45 @@ const Home = () => {
     }, 1800);
   };
 
-  const matchedUnis = calculatedZ
-    ? institutions.filter(inst => {
-      if (calculatedZ > 1.9) return true;
-      if (calculatedZ > 1.3 && inst.type === 'Government') return true;
-      if (inst.type === 'Private' || inst.type === 'Vocational') return true;
-      return false;
-    }).slice(0, 3)
-    : [];
+  const matchedUnis = calculatedZ ? matchedInstitutions : [];
+
+  // Search handler: if it matches an institution name -> institutions, else -> courses.
+  // The query is always sent via `q` so list pages can filter.
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      if (searchInputRef.current) searchInputRef.current.focus();
+      return;
+    }
+    const q = trimmed.toLowerCase();
+
+    const looksLikeInstitution = /(university|institute|college|campus|academy|school)/i.test(trimmed);
+    const matchedByApi = q.length >= 2 && institutionIndex.some((x) => x.nameLower.includes(q));
+    const matchedByMock = homeInstitutions.some((inst) => inst.name.toLowerCase().includes(q));
+
+    // Prefer routing to institutions when we are confident it's an institution query.
+    // If the API index hasn't loaded yet, fall back to mock + keyword heuristic.
+    if (matchedByApi || matchedByMock || (!institutionIndexLoaded && looksLikeInstitution)) {
+      navigate(`/institutions?q=${encodeURIComponent(trimmed)}`);
+      if (searchInputRef.current) searchInputRef.current.focus();
+      return;
+    }
+    navigate(`/courses?q=${encodeURIComponent(trimmed)}`);
+    if (searchInputRef.current) searchInputRef.current.focus();
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-[#fcfdfe] dark:bg-slate-950">
 
       <section className="relative h-[90vh] min-h-[700px] overflow-hidden bg-slate-950">
         {originalSlides.map((slide, index) => (
-          <div key={slide.id} className={`absolute inset-0 w-full h-full transition-opacity duration-1000 ${index === currentSlide ? 'opacity-100' : 'opacity-0'}`}>
+          <div
+            key={slide.id}
+            style={{ zIndex: index === currentSlide ? 2 : 1 }}
+            className={`absolute inset-0 w-full h-full transition-opacity duration-1000 ${index === currentSlide ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+          >
             <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url('${slide.image}')` }} />
             <div className="absolute inset-0 bg-gradient-to-b from-slate-950/60 via-slate-950/20 to-slate-950"></div>
 
@@ -150,12 +385,13 @@ const Home = () => {
       <div className="container mx-auto px-6 relative z-10 -mt-20">
         <div className="max-w-5xl mx-auto">
           <form
-            onSubmit={(e) => { e.preventDefault(); navigate(`/courses?q=${searchQuery}`); }}
+            onSubmit={handleSearch}
             className="glass dark:bg-slate-900/90 p-4 rounded-3xl shadow-premium flex items-center gap-4 border border-white/20"
           >
             <div className="flex-1 flex items-center pl-4">
               <Search className="text-slate-400 h-6 w-6 mr-4" />
               <input
+                ref={searchInputRef}
                 type="text"
                 placeholder="What do you want to study?"
                 className="flex-1 bg-transparent border-none py-4 text-xl font-bold text-slate-900 dark:text-white outline-none placeholder:text-slate-400"
@@ -225,7 +461,7 @@ const Home = () => {
             <div className="w-full lg:w-5/12 space-y-8 self-center animate-fade-in">
               <div className="max-w-lg">
                 <span className="inline-flex items-center gap-2 text-primary-600 font-black uppercase tracking-[0.3em] text-[9px] bg-primary-50 dark:bg-primary-900/20 px-6 py-2 rounded-full mb-6 shadow-sm border border-primary-100 dark:border-primary-900/30">
-                  <Calculator size={12} className="animate-pulse" /> 2025 SIMULATOR
+                  <Calculator size={12} className="animate-pulse" /> 2026 SIMULATOR
                 </span>
                 <h2 className="text-5xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter leading-[0.95] mb-6">
                   Z-Score <br /><span className="text-primary-600">Forecaster.</span>
@@ -243,7 +479,26 @@ const Home = () => {
                       {STREAMS.map((s) => (
                         <button
                           key={s.id}
-                          onClick={() => { setSelectedStreamId(s.id); setCalculatedZ(null); }}
+                          onClick={() => {
+                            setSelectedStreamId(s.id);
+                            setCalculatedZ(null);
+                            setResults(['', '', '']);
+                            if (s.id === 'physical') setPhysicalThirdSubject('Chemistry');
+                            if (s.id === 'bio') setBioThirdSubject('Physics');
+                            if (s.id === 'commerce') {
+                              setCommerceSecondSubject('Business Studies');
+                              setCommerceThirdSubject('Economics');
+                            }
+                            if (s.id === 'tech') {
+                              setTechSecondSubject('Engineering Technology');
+                              setTechThirdSubject('ICT');
+                            }
+                            if (s.id === 'arts') {
+                              setArtsFirstSubject(ARTS_MAJOR_SUBJECTS[0]);
+                              setArtsSecondSubject(ARTS_MAJOR_SUBJECTS[1]);
+                              setArtsThirdSubject(ARTS_THIRD_SUBJECTS[0]);
+                            }
+                          }}
                           className={`px-4 py-2.5 rounded-2xl text-[10px] font-black transition-all duration-500 uppercase tracking-widest ${selectedStreamId === s.id ? 'bg-primary-600 text-white shadow-glow' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:shadow-md border border-transparent hover:border-primary-200'}`}
                         >
                           {s.name}
@@ -253,13 +508,150 @@ const Home = () => {
                   </div>
 
                   <div className="grid grid-cols-1 gap-4">
-                    {selectedStream.subjects.map((sub, i) => (
-                      <div key={i} className="flex items-center justify-between p-4 bg-white dark:bg-slate-800/80 rounded-[1.25rem] border border-slate-100 dark:border-slate-700 shadow-sm group transition-all duration-500">
-                        <div className="flex items-center gap-4">
+                    {selectedSubjects.map((sub, i) => (
+                      <div key={i} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-white dark:bg-slate-800/80 rounded-[1.25rem] border border-slate-100 dark:border-slate-700 shadow-sm group transition-all duration-500">
+                        <div className="flex items-center gap-4 flex-1 min-w-0">
                           <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-900 flex items-center justify-center text-slate-400 font-black text-xs border border-slate-100 dark:border-slate-800">0{i + 1}</div>
-                          <span className="text-sm font-black text-slate-700 dark:text-slate-200 tracking-tight">{sub}</span>
+                          {selectedStreamId === 'physical' && i === 2 ? (
+                            <div className="relative min-w-[120px]">
+                              <select
+                                value={physicalThirdSubject}
+                                onChange={(e) => {
+                                  setPhysicalThirdSubject(e.target.value as 'Chemistry' | 'ICT');
+                                  setCalculatedZ(null);
+                                }}
+                                aria-label="Select third subject"
+                                className="bg-transparent border-none pl-0 pr-6 py-0 text-sm font-black text-slate-700 dark:text-slate-200 tracking-tight outline-none cursor-pointer appearance-none hover:text-primary-600 dark:hover:text-primary-400 focus:text-primary-600 dark:focus:text-primary-400"
+                              >
+                                <option value="Chemistry">Chemistry</option>
+                                <option value="ICT">ICT</option>
+                              </select>
+                              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                            </div>
+                          ) : selectedStreamId === 'bio' && i === 2 ? (
+                            <div className="relative min-w-[120px]">
+                              <select
+                                value={bioThirdSubject}
+                                onChange={(e) => {
+                                  setBioThirdSubject(e.target.value as 'Physics' | 'Agriculture');
+                                  setCalculatedZ(null);
+                                }}
+                                aria-label="Select third subject"
+                                className="bg-transparent border-none pl-0 pr-6 py-0 text-sm font-black text-slate-700 dark:text-slate-200 tracking-tight outline-none cursor-pointer appearance-none hover:text-primary-600 dark:hover:text-primary-400 focus:text-primary-600 dark:focus:text-primary-400"
+                              >
+                                <option value="Physics">Physics</option>
+                                <option value="Agriculture">Agriculture</option>
+                              </select>
+                              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                            </div>
+                          ) : selectedStreamId === 'commerce' && i === 1 ? (
+                            <div className="relative min-w-[140px]">
+                              <select
+                                value={commerceSecondSubject}
+                                onChange={(e) => {
+                                  setCommerceSecondSubject(e.target.value as 'Business Studies' | 'ICT');
+                                  setCalculatedZ(null);
+                                }}
+                                aria-label="Select second subject"
+                                className="bg-transparent border-none pl-0 pr-6 py-0 text-sm font-black text-slate-700 dark:text-slate-200 tracking-tight outline-none cursor-pointer appearance-none hover:text-primary-600 dark:hover:text-primary-400 focus:text-primary-600 dark:focus:text-primary-400"
+                              >
+                                <option value="Business Studies">Business Studies</option>
+                                <option value="ICT">ICT</option>
+                              </select>
+                              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                            </div>
+                          ) : selectedStreamId === 'commerce' && i === 2 ? (
+                            <div className="relative min-w-[170px]">
+                              <select
+                                value={commerceThirdSubject}
+                                onChange={(e) => {
+                                  setCommerceThirdSubject(e.target.value as 'Economics' | 'Business Statistics' | 'ICT');
+                                  setCalculatedZ(null);
+                                }}
+                                aria-label="Select third subject"
+                                className="bg-transparent border-none pl-0 pr-6 py-0 text-sm font-black text-slate-700 dark:text-slate-200 tracking-tight outline-none cursor-pointer appearance-none hover:text-primary-600 dark:hover:text-primary-400 focus:text-primary-600 dark:focus:text-primary-400"
+                              >
+                                <option value="Economics">Economics</option>
+                                <option value="Business Statistics">Business Statistics</option>
+                                <option value="ICT">ICT</option>
+                              </select>
+                              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                            </div>
+                          ) : selectedStreamId === 'tech' && i === 1 ? (
+                            <div className="relative min-w-[190px]">
+                              <select
+                                value={techSecondSubject}
+                                onChange={(e) => {
+                                  setTechSecondSubject(e.target.value as 'Bio System Technology' | 'Engineering Technology');
+                                  setCalculatedZ(null);
+                                }}
+                                aria-label="Select second subject"
+                                className="bg-transparent border-none pl-0 pr-6 py-0 text-sm font-black text-slate-700 dark:text-slate-200 tracking-tight outline-none cursor-pointer appearance-none hover:text-primary-600 dark:hover:text-primary-400 focus:text-primary-600 dark:focus:text-primary-400"
+                              >
+                                <option value="Bio System Technology">Bio System Technology</option>
+                                <option value="Engineering Technology">Engineering Technology</option>
+                              </select>
+                              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                            </div>
+                          ) : selectedStreamId === 'tech' && i === 2 ? (
+                            <div className="relative min-w-[190px]">
+                              <select
+                                value={techThirdSubject}
+                                onChange={(e) => {
+                                  setTechThirdSubject(e.target.value as 'Agriculture' | 'Geography' | 'Business Studies' | 'ICT');
+                                  setCalculatedZ(null);
+                                }}
+                                aria-label="Select third subject"
+                                className="bg-transparent border-none pl-0 pr-6 py-0 text-sm font-black text-slate-700 dark:text-slate-200 tracking-tight outline-none cursor-pointer appearance-none hover:text-primary-600 dark:hover:text-primary-400 focus:text-primary-600 dark:focus:text-primary-400"
+                              >
+                                <option value="Agriculture">Agriculture</option>
+                                <option value="Geography">Geography</option>
+                                <option value="Business Studies">Business Studies</option>
+                                <option value="ICT">ICT</option>
+                              </select>
+                              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                            </div>
+                          ) : selectedStreamId === 'arts' && (i === 0 || i === 1) ? (
+                            <div className="relative w-full sm:w-auto sm:min-w-[240px] min-w-0">
+                              <select
+                                value={i === 0 ? artsFirstSubject : artsSecondSubject}
+                                onChange={(e) => {
+                                  const next = e.target.value as ArtsMajorSubject;
+                                  if (i === 0) setArtsFirstSubject(next);
+                                  else setArtsSecondSubject(next);
+                                  setCalculatedZ(null);
+                                }}
+                                aria-label={i === 0 ? 'Select first subject' : 'Select second subject'}
+                                className="w-full bg-transparent border-none pl-0 pr-6 py-0 text-sm font-black text-slate-700 dark:text-slate-200 tracking-tight outline-none cursor-pointer appearance-none hover:text-primary-600 dark:hover:text-primary-400 focus:text-primary-600 dark:focus:text-primary-400"
+                              >
+                                {ARTS_MAJOR_SUBJECTS.map((s) => (
+                                  <option key={s} value={s}>{s}</option>
+                                ))}
+                              </select>
+                              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                            </div>
+                          ) : selectedStreamId === 'arts' && i === 2 ? (
+                            <div className="relative w-full sm:w-auto sm:min-w-[240px] min-w-0">
+                              <select
+                                value={artsThirdSubject}
+                                onChange={(e) => {
+                                  setArtsThirdSubject(e.target.value as ArtsThirdSubject);
+                                  setCalculatedZ(null);
+                                }}
+                                aria-label="Select third subject"
+                                className="w-full bg-transparent border-none pl-0 pr-6 py-0 text-sm font-black text-slate-700 dark:text-slate-200 tracking-tight outline-none cursor-pointer appearance-none hover:text-primary-600 dark:hover:text-primary-400 focus:text-primary-600 dark:focus:text-primary-400"
+                              >
+                                {ARTS_THIRD_SUBJECTS.map((s) => (
+                                  <option key={s} value={s}>{s}</option>
+                                ))}
+                              </select>
+                              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                            </div>
+                          ) : (
+                            <span className="text-sm font-black text-slate-700 dark:text-slate-200 tracking-tight truncate">{sub}</span>
+                          )}
                         </div>
-                        <div className="relative w-32">
+                        <div className="relative w-32 shrink-0 self-end sm:self-auto">
                           <select
                             value={results[i]}
                             onChange={(e) => {
@@ -327,29 +719,15 @@ const Home = () => {
                   </div>
                 ) : (
                   <div className="animate-fade-in-up space-y-12 relative z-10">
-                    <div className="flex flex-col xl:flex-row items-center justify-between gap-12">
-                      <div className="text-center xl:text-left shrink-0">
+                    <div className="flex flex-col items-center justify-center gap-8">
+                      <div className="text-center shrink-0">
                         <span className="text-primary-400 font-black uppercase tracking-[0.4em] text-[10px] mb-4 block">ESTIMATED INDEX</span>
-                        <div className="text-8xl md:text-9xl font-black text-white tracking-tighter tabular-nums leading-none mb-8 drop-shadow-glow">
+                        <div className="text-7xl md:text-8xl font-black text-white tracking-tighter tabular-nums leading-none mb-8 drop-shadow-glow">
                           {calculatedZ}
                         </div>
                         <div className="inline-flex items-center gap-3 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-6 py-3 rounded-2xl backdrop-blur-md">
                           <Rocket size={20} className="animate-bounce" />
                           <span className="text-[11px] font-black uppercase tracking-[0.2em]">Tier Projection</span>
-                        </div>
-                      </div>
-
-                      <div className="flex-1 w-full space-y-6">
-                        <p className="text-white/30 font-black uppercase tracking-[0.4em] text-[9px] mb-2 text-center xl:text-left">CAREER SYNTHESIS</p>
-                        <div className="grid grid-cols-1 gap-3">
-                          {selectedStream.careers.map((career, i) => (
-                            <div key={i} className="flex items-center gap-4 bg-white/5 border border-white/10 p-4 rounded-2xl group hover:bg-white/10 transition-all duration-500 cursor-default">
-                              <div className="w-10 h-10 bg-primary-600/20 text-primary-500 rounded-xl flex items-center justify-center shrink-0">
-                                <Briefcase size={20} />
-                              </div>
-                              <span className="text-lg font-bold text-slate-200 tracking-tight leading-tight">{career}</span>
-                            </div>
-                          ))}
                         </div>
                       </div>
                     </div>
@@ -365,18 +743,43 @@ const Home = () => {
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        {matchedUnis.map((uni, i) => (
-                          <Link to={`/institutions/${uni.id}`} key={uni.id} className="group p-5 bg-white/5 border border-white/10 rounded-3xl hover:bg-primary-600 transition-all duration-500 text-center sm:text-left">
+                        {loadingMatches ? (
+                          [1, 2, 3].map((i) => (
+                            <div key={i} className="group p-5 bg-white/5 border border-white/10 rounded-3xl text-center sm:text-left animate-pulse">
+                              <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/10 shadow-lg mb-4" />
+                              <div className="h-4 w-3/4 bg-white/10 rounded mb-3" />
+                              <div className="h-3 w-1/2 bg-white/10 rounded" />
+                            </div>
+                          ))
+                        ) : (
+                        matchedUnis.map((uni, i) => {
+                          const uniId = (uni as any).id ?? uni._id ?? String(i);
+                          const imageUrl = (uni as any).imageUrl ?? (uni as any).image_url ?? '';
+
+                          const contactText = Array.isArray(uni.contact_info)
+                            ? uni.contact_info.join(' ')
+                            : uni.contact_info
+                              ? Object.values(uni.contact_info as any).join(' ')
+                              : '';
+
+                          const district = contactText || uni.country || '';
+                          return (
+                          <Link to={`/institutions/${uniId}`} key={uniId} className="group p-5 bg-white/5 border border-white/10 rounded-3xl hover:bg-primary-600 transition-all duration-500 text-center sm:text-left">
                             <div className="relative mb-4 inline-block">
-                              <img src={uni.imageUrl} className="w-12 h-12 rounded-xl object-cover grayscale group-hover:grayscale-0 transition-all border border-white/10 shadow-lg" alt="" />
+                              {imageUrl ? (
+                                <img src={imageUrl} className="w-12 h-12 rounded-xl object-cover grayscale group-hover:grayscale-0 transition-all border border-white/10 shadow-lg" alt="" />
+                              ) : (
+                                <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/10 shadow-lg" />
+                              )}
                             </div>
                             <h5 className="text-white font-black text-sm leading-tight mb-2 line-clamp-1 uppercase tracking-tight">{uni.name}</h5>
                             <div className="flex items-center gap-2 text-slate-500 text-[9px] group-hover:text-white/70">
                               <MapPin size={10} />
-                              <span className="font-black uppercase tracking-widest">{uni.district}</span>
+                              <span className="font-black uppercase tracking-widest">{district}</span>
                             </div>
                           </Link>
-                        ))}
+                          );
+                        }))}
                       </div>
                     </div>
 

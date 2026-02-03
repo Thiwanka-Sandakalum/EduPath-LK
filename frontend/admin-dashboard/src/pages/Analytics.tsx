@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Title, Text, Group, Button, SimpleGrid, Card, Select, Badge, Stack, Box, useMantineTheme } from '@mantine/core';
-import { Download, Filter, TrendingUp, Sparkles } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Title, Text, Group, Button, SimpleGrid, Card, Badge, Stack, Box, Textarea, useMantineTheme } from '@mantine/core';
+import { Download, Filter, Sparkles } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 import { GoogleGenAI } from "@google/genai";
+import { onAdminDataChanged } from '../utils/adminEvents';
 
 const DATA = [
    { label: 'Jan', Medicine: 4000, Engineering: 2400, IT: 2400 },
@@ -16,28 +17,95 @@ const ZSCORE = [
    { level: 'Bio', value: 380 }, { level: 'Math', value: 450 }, { level: 'Comm', value: 520 }, { level: 'Arts', value: 310 }
 ];
 
+type TrendKey = 'Medicine' | 'Engineering' | 'IT';
+
+function buildTrendSummary(rows: typeof DATA) {
+   const keys: TrendKey[] = ['Medicine', 'Engineering', 'IT'];
+   const last = rows[rows.length - 1];
+   const first = rows[0];
+   const deltas = keys
+      .map((key) => ({
+         key,
+         first: first?.[key] ?? 0,
+         last: last?.[key] ?? 0,
+         delta: (last?.[key] ?? 0) - (first?.[key] ?? 0),
+      }))
+      .sort((a, b) => b.delta - a.delta);
+
+   const best = deltas[0];
+   const worst = deltas[deltas.length - 1];
+
+   return {
+      best,
+      worst,
+      deltas,
+      period: `${first?.label ?? ''} → ${last?.label ?? ''}`.trim(),
+   };
+}
+
+function downloadTextFile(filename: string, content: string, mime = 'text/plain;charset=utf-8') {
+   const blob = new Blob([content], { type: mime });
+   const url = URL.createObjectURL(blob);
+   const a = document.createElement('a');
+   a.href = url;
+   a.download = filename;
+   document.body.appendChild(a);
+   a.click();
+   a.remove();
+   URL.revokeObjectURL(url);
+}
+
 const Analytics: React.FC = () => {
    const theme = useMantineTheme();
    const [generating, setGenerating] = useState(false);
    const [report, setReport] = useState<string | null>(null);
+   const [customPrompt, setCustomPrompt] = useState('');
+   const [, setRefreshTick] = useState(0);
+
+   const trend = useMemo(() => buildTrendSummary(DATA), []);
+
+   useEffect(() => {
+      return onAdminDataChanged(() => setRefreshTick((t) => t + 1));
+   }, []);
+
+   const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY as string | undefined;
 
    const generateAI = async () => {
-      if(!process.env.API_KEY) { alert("No API Key configured in environment"); return; }
+      if (!apiKey) {
+         alert('No API Key configured. Set VITE_GEMINI_API_KEY in frontend/admin-dashboard/.env.local');
+         return;
+      }
       setGenerating(true);
       try {
-         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-         const res = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: 'Analyze trends: Medicine rising.' });
-         setReport(res.text || "No report.");
-      } catch(e) { console.error(e); setReport("Failed to generate report."); }
+         const ai = new GoogleGenAI({ apiKey });
+         const prompt = [
+            'You are an analytics assistant for an education platform admin dashboard.',
+            `Period: ${trend.period}`,
+            `Trend deltas: ${trend.deltas.map((d) => `${d.key}: ${d.first} → ${d.last} (Δ ${d.delta})`).join(' | ')}`,
+            'Provide: (1) 3 key insights, (2) risks/anomalies, (3) 3 recommendations.',
+            customPrompt ? `Additional context from admin: ${customPrompt}` : '',
+         ].filter(Boolean).join('\n');
+
+         // Use a stable/default model name; adjust if you have a specific one.
+         const res = await ai.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: prompt,
+         });
+
+         setReport(res.text || 'No report.');
+      } catch (e) {
+         console.error(e);
+         setReport('Failed to generate report. Check the API key and network.');
+      }
       setGenerating(false);
    };
 
    const handleExport = () => {
-      const csvContent = "data:text/csv;charset=utf-8," 
-        + "Month,Medicine,Engineering,IT\n"
-        + DATA.map(e => `${e.label},${e.Medicine},${e.Engineering},${e.IT}`).join("\n");
-      const encodedUri = encodeURI(csvContent);
-      window.open(encodedUri);
+      const csvContent = [
+         'Month,Medicine,Engineering,IT',
+         ...DATA.map((e) => `${e.label},${e.Medicine},${e.Engineering},${e.IT}`),
+      ].join('\n');
+      downloadTextFile('analytics-stream-popularity.csv', csvContent, 'text/csv;charset=utf-8');
    };
 
    return (
@@ -68,6 +136,27 @@ const Analytics: React.FC = () => {
                <Text size="sm">{report}</Text>
             </Card>
          )}
+
+         <Card withBorder radius="md" padding="lg">
+            <Group justify="space-between" align="flex-start">
+               <Box>
+                  <Title order={4}>AI Report Input</Title>
+                  <Text c="dimmed" size="sm">
+                     Optional: add context (campaigns, events, issues) to get a better report.
+                  </Text>
+               </Box>
+               <Badge variant="light" color={apiKey ? 'green' : 'red'}>
+                  {apiKey ? 'AI Ready' : 'No API Key'}
+               </Badge>
+            </Group>
+            <Textarea
+               mt="md"
+               minRows={3}
+               placeholder="Example: February intake started; Engineering promotions running; watch IT drop-off..."
+               value={customPrompt}
+               onChange={(e) => setCustomPrompt(e.currentTarget.value)}
+            />
+         </Card>
 
          <SimpleGrid cols={{ base: 1, md: 3 }}>
             {[

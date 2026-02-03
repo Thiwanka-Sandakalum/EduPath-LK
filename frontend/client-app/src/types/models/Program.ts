@@ -20,6 +20,10 @@ export type Program = {
      */
     program_code?: string;
     /**
+     * Public image URL for the program
+     */
+    image_url?: string;
+    /**
      * Program overview
      */
     description?: string;

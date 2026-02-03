@@ -31,6 +31,7 @@ const Navbar = () => {
     { label: t.institutions, path: '/institutions' },
     { label: t.courses, path: '/courses' },
     { label: t.scholarships, path: '/scholarships' },
+    { label: 'Loans', path: '/loans' },
     { label: t.tools, path: '/tools' },
     { label: t.blog, path: '/blog' },
     { label: t.chat, path: '/chat' },

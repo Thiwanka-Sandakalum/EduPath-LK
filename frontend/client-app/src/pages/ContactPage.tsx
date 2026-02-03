@@ -14,7 +14,7 @@ const Contact = () => {
       {/* HERO SECTION */}
       <div className="relative h-[300px] overflow-hidden mb-12">
          <img 
-            src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=2000&auto=format&fit=crop" 
+            src="https://recouncil.com/wp-content/uploads/2023/05/Contact-Us_TREC-Web-Page.png" 
             className="w-full h-full object-cover" 
             alt="Contact Hero" 
          />

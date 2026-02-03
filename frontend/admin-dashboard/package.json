@@ -15,6 +15,7 @@
     "@mantine/core": "7.5.0",
     "@mantine/dates": "7.5.0",
     "@mantine/hooks": "7.5.0",
+    "axios": "^1.13.2",
     "clsx": "latest",
     "dayjs": "1.11.10",
     "firebase": "^12.8.0",

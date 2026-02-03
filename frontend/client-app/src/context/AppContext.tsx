@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { UserApplication, UserInquiry, UserProfile, ChatSession } from '../types';
+import type { UserApplication, UserInquiry, UserProfile } from '../types/user';
+import type { ChatSession } from '../types/chat';
 import { Language } from '../data/translations';
 
 // Define Theme Type
@@ -18,6 +19,11 @@ interface AppState {
   toggleDarkMode: () => void;
   savedInstitutions: string[];
   toggleSavedInstitution: (id: string) => void;
+  savedCourses: string[];
+  toggleSavedCourse: (id: string) => void;
+  compareCourses: string[];
+  toggleCompareCourse: (id: string) => 'added' | 'removed' | 'limit';
+  clearCompareCourses: () => void;
   applications: UserApplication[];
   addApplication: (app: UserApplication) => void;
   inquiries: UserInquiry[];
@@ -105,9 +111,30 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     }];
   });
 
-  const [savedInstitutions, setSavedInstitutions] = useState<string[]>(() =>
-    JSON.parse(localStorage.getItem('eduPath_saved') || '[]')
-  );
+  const normalizeStoredId = (value: unknown): string | null => {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === 'undefined' || trimmed === 'null') return null;
+    if (trimmed.includes('[object Object]')) return null;
+    return trimmed;
+  };
+
+  const loadIdList = (key: string): string[] => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(key) || '[]');
+      if (!Array.isArray(raw)) return [];
+      const normalized = raw.map(normalizeStoredId).filter(Boolean) as string[];
+      return Array.from(new Set(normalized));
+    } catch {
+      return [];
+    }
+  };
+
+  const [savedInstitutions, setSavedInstitutions] = useState<string[]>(() => loadIdList('eduPath_saved'));
+
+  const [savedCourses, setSavedCourses] = useState<string[]>(() => loadIdList('eduPath_saved_courses'));
+
+  const [compareCourses, setCompareCourses] = useState<string[]>(() => loadIdList('eduPath_compare_courses'));
 
   const [applications, setApplications] = useState<UserApplication[]>(() =>
     JSON.parse(localStorage.getItem('eduPath_applications') || '[]')
@@ -147,6 +174,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   useEffect(() => localStorage.setItem('eduPath_dark', String(darkMode)), [darkMode]);
   useEffect(() => localStorage.setItem('eduPath_registry', JSON.stringify(registeredUsers)), [registeredUsers]);
   useEffect(() => localStorage.setItem('eduPath_saved', JSON.stringify(savedInstitutions)), [savedInstitutions]);
+  useEffect(() => localStorage.setItem('eduPath_saved_courses', JSON.stringify(savedCourses)), [savedCourses]);
+  useEffect(() => localStorage.setItem('eduPath_compare_courses', JSON.stringify(compareCourses)), [compareCourses]);
   useEffect(() => localStorage.setItem('eduPath_applications', JSON.stringify(applications)), [applications]);
   useEffect(() => localStorage.setItem('eduPath_inquiries', JSON.stringify(inquiries)), [inquiries]);
   useEffect(() => localStorage.setItem('eduPath_recent', JSON.stringify(recentlyViewed)), [recentlyViewed]);
@@ -186,9 +215,42 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   // --- Logic ---
 
   const toggleSavedInstitution = useCallback((id: string) => {
+    const normalized = normalizeStoredId(id);
+    if (!normalized) return;
     setSavedInstitutions(prev =>
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+      prev.includes(normalized) ? prev.filter(item => item !== normalized) : [...prev, normalized]
     );
+  }, []);
+
+  const toggleSavedCourse = useCallback((id: string) => {
+    const normalized = normalizeStoredId(id);
+    if (!normalized) return;
+    setSavedCourses(prev =>
+      prev.includes(normalized) ? prev.filter(item => item !== normalized) : [...prev, normalized]
+    );
+  }, []);
+
+  const toggleCompareCourse = useCallback((id: string) => {
+    const normalized = normalizeStoredId(id);
+    if (!normalized) return 'removed' as const;
+    let action: 'added' | 'removed' | 'limit' = 'added';
+    setCompareCourses(prev => {
+      if (prev.includes(normalized)) {
+        action = 'removed';
+        return prev.filter(item => item !== normalized);
+      }
+      if (prev.length >= 3) {
+        action = 'limit';
+        return prev;
+      }
+      action = 'added';
+      return [...prev, normalized];
+    });
+    return action;
+  }, []);
+
+  const clearCompareCourses = useCallback(() => {
+    setCompareCourses([]);
   }, []);
 
   const addApplication = useCallback((app: UserApplication) => {
@@ -235,6 +297,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       toggleDarkMode,
       savedInstitutions,
       toggleSavedInstitution,
+      savedCourses,
+      toggleSavedCourse,
+      compareCourses,
+      toggleCompareCourse,
+      clearCompareCourses,
       applications,
       addApplication,
       inquiries,

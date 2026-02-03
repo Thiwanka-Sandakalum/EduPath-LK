@@ -603,6 +603,11 @@ components:
           type: string
           description: Unique identifier
           example: "UOC"
+        image_url:
+          type: string
+          format: uri
+          description: Public image URL for the institution (hero/logo)
+          example: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=2000&auto=format&fit=crop"
         description:
           type: string
           description: Institution overview
@@ -661,6 +666,9 @@ components:
           type: string
         institution_code:
           type: string
+        image_url:
+          type: string
+          format: uri
         description:
           type: string
         type:
@@ -695,6 +703,9 @@ components:
           type: string
         institution_code:
           type: string
+        image_url:
+          type: string
+          format: uri
         description:
           type: string
         type:
@@ -725,6 +736,9 @@ components:
           type: string
         institution_code:
           type: string
+        image_url:
+          type: string
+          format: uri
         description:
           type: string
         type:

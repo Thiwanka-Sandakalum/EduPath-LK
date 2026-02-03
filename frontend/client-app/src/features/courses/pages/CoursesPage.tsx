@@ -3,7 +3,55 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { ProgramsService } from '../../../types/services/ProgramsService';
 
 import { InstitutionsService } from '../../../types/services/InstitutionsService';
-import { ArrowRight, Search, BookOpen, MapPin, ChevronDown } from 'lucide-react';
+import { ArrowRight, Search, BookOpen, MapPin, ChevronDown, Bookmark } from 'lucide-react';
+import { useAppStore } from '../../../context/AppContext';
+
+type InstitutionClassification = 'Private' | 'Government';
+
+type InstitutionView = {
+  _id: string;
+  name?: string;
+  classification: InstitutionClassification;
+};
+
+type GovernmentDegreeProgram = {
+  _id: string;
+  title?: string;
+  name?: string;
+  stream?: string;
+  duration_years?: number;
+  medium_of_instruction?: string;
+  description?: string;
+  al_requirements?: any;
+  ol_requirements?: any;
+  aptitude_test_required?: boolean;
+};
+
+type GovernmentCourseOffering = {
+  degree_program_id: string;
+  university_id: string;
+  proposed_intake?: number;
+  cutoff_marks?: Record<string, string | number | null | undefined>;
+  academic_year?: string;
+};
+
+const safeJsonFetch = async (url: string) => {
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
+  const text = await res.text();
+  const cleaned = text.replace(/^\uFEFF/, '');
+  return JSON.parse(cleaned);
+};
+
+const extractArrayFromJson = (json: any, keys: string[]): any[] => {
+  if (Array.isArray(json)) return json;
+  if (!json || typeof json !== 'object') return [];
+  for (const k of keys) {
+    const v = (json as any)[k];
+    if (Array.isArray(v)) return v;
+  }
+  return [];
+};
 
 const heroImages = [
   "https://images.unsplash.com/photo-1501504905252-473c47e087f8?q=80&w=2000",
@@ -14,6 +62,25 @@ const heroImages = [
 
 const CoursesPage = () => {
   const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
+
+  const [searchParams] = useSearchParams();
+
+  const { toggleSavedCourse, savedCourses } = useAppStore();
+
+  const extractId = (value: unknown): string | null => {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed || trimmed === 'undefined' || trimmed === 'null') return null;
+      if (trimmed.includes('[object Object]')) return null;
+      return trimmed;
+    }
+    if (value && typeof value === 'object') {
+      const v: any = value;
+      const candidate = v.$oid ?? v.oid ?? v.id ?? v._id;
+      return extractId(candidate);
+    }
+    return null;
+  };
 
 
 
@@ -35,11 +102,16 @@ const CoursesPage = () => {
   const [pageSize, setPageSize] = useState(12);
 
   // State for institutions
-  const [institutions, setInstitutions] = useState<any[]>([]);
+  const [institutions, setInstitutions] = useState<InstitutionView[]>([]);
   const [instLoading, setInstLoading] = useState(false);
   const [instError, setInstError] = useState<string | null>(null);
 
+  // Government data (JSON)
+  const [governmentPrograms, setGovernmentPrograms] = useState<GovernmentDegreeProgram[]>([]);
+  const [governmentOfferings, setGovernmentOfferings] = useState<GovernmentCourseOffering[]>([]);
+
   // Filter state
+  const [filterClassification, setFilterClassification] = useState('');
   const [filterInstitution, setFilterInstitution] = useState('');
   const [filterLevel, setFilterLevel] = useState('');
   const [filterDeliveryMode, setFilterDeliveryMode] = useState('');
@@ -48,12 +120,83 @@ const CoursesPage = () => {
   const [filterDuration, setFilterDuration] = useState('');
   const [filterEligibility, setFilterEligibility] = useState('');
 
+  // Support deep links like /courses?q=some%20name
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q && q.trim()) {
+      setFilterName(q.trim());
+    }
+  }, [searchParams]);
+
   // Distinct filter options
   const [levels, setLevels] = useState<string[]>([]);
   const [deliveryModes, setDeliveryModes] = useState<string[]>([]);
   const [specializations, setSpecializations] = useState<string[]>([]);
   const [durations, setDurations] = useState<string[]>([]);
   const [eligibilities, setEligibilities] = useState<string[]>([]);
+
+  // Institution-scoped filter options (when an institution is selected)
+  const [scopedLevels, setScopedLevels] = useState<string[]>([]);
+  const [scopedSpecializations, setScopedSpecializations] = useState<string[]>([]);
+  const [scopedOptionsLoading, setScopedOptionsLoading] = useState(false);
+
+  const matchesClassification = (inst: InstitutionView | undefined, classification: string) => {
+    if (!classification) return true;
+    if (!inst) return false;
+    const normalized = classification.trim().toLowerCase();
+    return inst.classification.toLowerCase() === normalized;
+  };
+
+  const normalizeStr = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : '');
+
+  const getGovernmentProgramSpecializations = (p: GovernmentDegreeProgram): string[] => {
+    const stream = typeof p.stream === 'string' ? p.stream.trim() : '';
+    return stream ? [stream] : [];
+  };
+
+  const governmentStreams = useMemo(() => {
+    const values = governmentPrograms
+      .flatMap((p) => getGovernmentProgramSpecializations(p))
+      .filter((s): s is string => typeof s === 'string')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return Array.from(new Set<string>(values)).sort((a, b) => a.localeCompare(b));
+  }, [governmentPrograms]);
+
+  const classificationOptions = useMemo(() => {
+    return ['Private', 'Government'] as string[];
+  }, []);
+
+  const visibleInstitutions = useMemo(() => {
+    if (!filterClassification) return institutions;
+    return institutions.filter((inst) => matchesClassification(inst, filterClassification));
+  }, [institutions, filterClassification]);
+
+  const visibleLevels = useMemo(() => {
+    const baseLevels = filterInstitution ? scopedLevels : levels;
+    // Government programs are currently treated as Undergraduate only.
+    // Merge it in so selecting Government doesn't result in an empty Level dropdown.
+    const merged = Array.from(
+      new Set<string>(
+        [...(baseLevels || []), 'Undergraduate']
+          .filter((v): v is string => typeof v === 'string' && Boolean(v.trim()))
+          .map((v) => v.trim())
+      )
+    );
+    return merged.sort((a, b) => a.localeCompare(b));
+  }, [filterInstitution, scopedLevels, levels]);
+
+  const visibleSpecializations = useMemo(() => {
+    const baseSpecs = filterInstitution ? scopedSpecializations : specializations;
+    const merged = Array.from(
+      new Set<string>(
+        [...(baseSpecs || []), ...governmentStreams]
+          .filter((v): v is string => typeof v === 'string' && Boolean(v.trim()))
+          .map((v) => v.trim())
+      )
+    );
+    return merged.sort((a, b) => a.localeCompare(b));
+  }, [filterInstitution, scopedSpecializations, specializations, governmentStreams]);
 
 
 
@@ -62,9 +205,44 @@ const CoursesPage = () => {
   useEffect(() => {
     setInstLoading(true);
     setInstError(null);
-    InstitutionsService.listInstitutions(1, 100)
-      .then((res) => {
-        setInstitutions(res.data || []);
+    Promise.all([
+      InstitutionsService.listInstitutions(1, 1000),
+      safeJsonFetch('/government-institutions.json').catch(() => null),
+      safeJsonFetch('/government-degree-programs.json').catch(() => null),
+      safeJsonFetch('/government-course-offerings.json').catch(() => null),
+    ])
+      .then(([backendInstRes, govInstJson, govProgramsJson, govOfferingsJson]) => {
+        const backendInstitutions = (backendInstRes?.data || []) as any[];
+        const privateViews: InstitutionView[] = backendInstitutions
+          .filter((i) => i && typeof i === 'object' && typeof i._id === 'string')
+          .map((i) => ({ _id: String(i._id), name: i.name, classification: 'Private' as const }));
+
+        const govRaw = govInstJson ? extractArrayFromJson(govInstJson, ['institutions', 'data', 'universities']) : [];
+        const govViews: InstitutionView[] = govRaw
+          .filter((i: any) => i && typeof i === 'object' && typeof i._id === 'string')
+          .map((i: any) => ({ _id: String(i._id), name: i.name, classification: 'Government' as const }));
+
+        const mergedInstitutions = [...govViews, ...privateViews].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        setInstitutions(mergedInstitutions);
+
+        const programsRaw = govProgramsJson ? extractArrayFromJson(govProgramsJson, ['degreePrograms', 'degree_programs', 'programs', 'data']) : [];
+        const govPrograms = programsRaw
+          .filter((p: any) => p && typeof p === 'object' && typeof p._id === 'string') as GovernmentDegreeProgram[];
+        // Source dataset can contain duplicate _id entries (e.g., C054). Deduplicate to keep React keys unique.
+        const dedupedGovPrograms = Array.from(new Map(govPrograms.map((p) => [String(p._id), p])).values());
+        setGovernmentPrograms(dedupedGovPrograms);
+
+        const offeringsRaw = govOfferingsJson ? extractArrayFromJson(govOfferingsJson, ['offerings', 'course_offerings', 'data']) : [];
+        const govOfferings = offeringsRaw
+          .filter((o: any) => o && typeof o === 'object' && typeof o.degree_program_id === 'string' && typeof o.university_id === 'string')
+          .map((o: any) => ({
+            degree_program_id: String(o.degree_program_id),
+            university_id: String(o.university_id),
+            proposed_intake: typeof o.proposed_intake === 'number' ? o.proposed_intake : undefined,
+            cutoff_marks: o.cutoff_marks && typeof o.cutoff_marks === 'object' ? o.cutoff_marks : undefined,
+            academic_year: typeof o.academic_year === 'string' ? o.academic_year : undefined,
+          })) as GovernmentCourseOffering[];
+        setGovernmentOfferings(govOfferings);
       })
       .catch(() => {
         setInstError('Failed to load institutions');
@@ -83,12 +261,233 @@ const CoursesPage = () => {
   // Reset to page 1 when filters or pageSize change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterInstitution, filterLevel, filterDeliveryMode, filterSpecialization, filterName, filterDuration, filterEligibility, pageSize]);
+  }, [filterClassification, filterInstitution, filterLevel, filterDeliveryMode, filterSpecialization, filterName, filterDuration, filterEligibility, pageSize]);
+
+  // If classification changes and selected institution doesn't match it, clear institution filter
+  useEffect(() => {
+    if (!filterClassification) return;
+    if (!filterInstitution) return;
+    const inst = institutions.find((i) => String(i?._id) === String(filterInstitution));
+    if (!inst) return;
+    if (!matchesClassification(inst, filterClassification)) {
+      setFilterInstitution('');
+    }
+  }, [filterClassification, filterInstitution, institutions]);
+
+  // When institution changes, scope Level & Specialization options to that institution
+  useEffect(() => {
+    if (!filterInstitution) {
+      setScopedLevels([]);
+      setScopedSpecializations([]);
+      return;
+    }
+
+    const inst = institutions.find((i) => String(i?._id) === String(filterInstitution));
+    const isGovernmentInstitution = inst?.classification === 'Government';
+    if (isGovernmentInstitution) {
+      setScopedOptionsLoading(false);
+      // Scope options based on government JSON (offerings + programs)
+      const offeredProgramIds = new Set(
+        governmentOfferings
+          .filter((o) => String(o.university_id) === String(filterInstitution))
+          .map((o) => String(o.degree_program_id))
+      );
+
+      const offeredPrograms = governmentPrograms.filter((p) => offeredProgramIds.has(String(p._id)));
+
+      const nextLevels = ['Undergraduate'];
+      const specValues = offeredPrograms
+        .flatMap((p) => getGovernmentProgramSpecializations(p))
+        .filter((s): s is string => typeof s === 'string')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const nextSpecs = Array.from(new Set<string>(specValues)).sort((a, b) => a.localeCompare(b));
+
+      setScopedLevels(nextLevels);
+      setScopedSpecializations(nextSpecs);
+
+      if (filterLevel && !nextLevels.includes(filterLevel)) setFilterLevel('');
+      if (filterSpecialization && !nextSpecs.includes(filterSpecialization)) setFilterSpecialization('');
+      return;
+    }
+
+    let cancelled = false;
+    setScopedOptionsLoading(true);
+
+    // Fetch a large batch of programs for the institution and derive available options
+    ProgramsService.listPrograms(
+      1,
+      5000,
+      filterInstitution,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'name:asc'
+    )
+      .then((res) => {
+        if (cancelled) return;
+        const data = (res.data || []) as any[];
+
+        const nextLevels = Array.from(
+          new Set(
+            data
+              .map((p) => (typeof p?.level === 'string' ? p.level.trim() : ''))
+              .filter(Boolean)
+          )
+        ).sort((a, b) => a.localeCompare(b));
+
+        const nextSpecs = Array.from(
+          new Set(
+            data
+              .flatMap((p) => (Array.isArray(p?.specializations) ? p.specializations : []))
+              .filter((v) => typeof v === 'string')
+              .map((v: string) => v.trim())
+              .filter(Boolean)
+          )
+        ).sort((a, b) => a.localeCompare(b));
+
+        setScopedLevels(nextLevels);
+        setScopedSpecializations(nextSpecs);
+
+        // Clear current selections if they are no longer valid for this institution
+        if (filterLevel && !nextLevels.includes(filterLevel)) setFilterLevel('');
+        if (filterSpecialization && !nextSpecs.includes(filterSpecialization)) setFilterSpecialization('');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setScopedLevels([]);
+        setScopedSpecializations([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setScopedOptionsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filterInstitution, filterLevel, filterSpecialization]);
 
   // Fetch courses with filters and pagination
   useEffect(() => {
     setLoading(true);
     setError(null);
+    const normalizedClassification = filterClassification.trim().toLowerCase();
+    const isGovernmentOnly = normalizedClassification === 'government';
+    const isPrivateOnly = normalizedClassification === 'private';
+    const includeGovernment = !isPrivateOnly;
+    const includeBackend = !isGovernmentOnly;
+
+    const normalizeGovCourses = () => {
+      const nameQ = filterName.trim().toLowerCase();
+      const byInstitution = filterInstitution ? String(filterInstitution) : '';
+      const specQ = normalizeStr(filterSpecialization);
+      const levelQ = normalizeStr(filterLevel);
+
+      const allowProgram = (p: GovernmentDegreeProgram) => {
+        if (nameQ) {
+          const title = (p.title || p.name || '').toString().toLowerCase();
+          if (!title.includes(nameQ)) return false;
+        }
+        if (levelQ) {
+          // Government programs are treated as Undergraduate for now.
+          if (levelQ !== 'undergraduate') return false;
+        }
+        if (specQ) {
+          const programSpecs = getGovernmentProgramSpecializations(p).map(normalizeStr).filter(Boolean);
+          const title = normalizeStr(p.title || p.name || '');
+          // Match either program stream (exact) or a title contains match.
+          const streamMatch = programSpecs.some((s) => s === specQ);
+          const titleMatch = title.includes(specQ);
+          if (!streamMatch && !titleMatch) return false;
+        }
+        if (filterDeliveryMode && filterDeliveryMode.trim()) return false;
+        if (filterDuration && filterDuration.trim()) return false;
+        if (filterEligibility && filterEligibility.trim()) return false;
+
+        if (byInstitution) {
+          return governmentOfferings.some(
+            (o) => o.degree_program_id === p._id && String(o.university_id) === byInstitution
+          );
+        }
+        return true;
+      };
+
+      const filteredGov = governmentPrograms.filter(allowProgram);
+
+      return filteredGov.map((p) => {
+        const title = p.title || p.name || p._id;
+        return {
+          _id: p._id,
+          name: title,
+          title,
+          description: p.description || 'Government university degree program.',
+          level: 'Undergraduate',
+          duration: typeof p.duration_years === 'number' ? { years: p.duration_years } : undefined,
+          institution_id: undefined,
+          __classification: 'Government',
+          __institutionName: byInstitution
+            ? institutions.find((i) => String(i._id) === byInstitution)?.name || 'Government University'
+            : 'Government Universities',
+        };
+      });
+    };
+
+    if (isGovernmentOnly) {
+      const govCourses = includeGovernment ? normalizeGovCourses() : [];
+      const total = govCourses.length;
+      const totalP = Math.max(1, Math.ceil(total / pageSize));
+      const start = (currentPage - 1) * pageSize;
+      setCourses(govCourses.slice(start, start + pageSize));
+      setTotalPages(totalP);
+      setLoading(false);
+      return;
+    }
+
+    const isClassificationOnlyMode = Boolean(filterClassification && !filterInstitution);
+
+    if (isClassificationOnlyMode) {
+      // Fetch a larger batch then filter client-side by institution classification
+      const bigPageSize = 5000;
+      ProgramsService.listPrograms(
+        1,
+        bigPageSize,
+        undefined,
+        filterName || undefined,
+        filterLevel || undefined,
+        filterDeliveryMode || undefined,
+        filterSpecialization || undefined,
+        filterDuration || undefined,
+        filterEligibility || undefined
+      )
+        .then((res) => {
+          const all = (res.data || []) as any[];
+          const allowed = new Set(
+            visibleInstitutions.map((i) => String(i?._id)).filter(Boolean)
+          );
+          const filtered = all.filter((c) => allowed.has(String(c?.institution_id)));
+
+          // Private classification-only mode should not inject government results.
+          // If user chose "All" this branch won't run; if "Private" it should remain backend-only.
+
+          const total = filtered.length;
+          const totalP = Math.max(1, Math.ceil(total / pageSize));
+          const start = (currentPage - 1) * pageSize;
+          const pageItems = filtered.slice(start, start + pageSize);
+          setCourses(pageItems);
+          setTotalPages(totalP);
+        })
+        .catch(() => {
+          setError('Failed to load courses');
+        })
+        .finally(() => setLoading(false));
+
+      return;
+    }
+
     ProgramsService.listPrograms(
       currentPage,
       pageSize,
@@ -101,14 +500,31 @@ const CoursesPage = () => {
       filterEligibility || undefined
     )
       .then((res) => {
-        setCourses(res.data || []);
+        const list = (res.data || []) as any[];
+        // If both institution and classification are chosen, keep only matching results
+        const filtered = filterClassification
+          ? list.filter((c) => {
+              const inst = institutions.find((i) => String(i?._id) === String(c?.institution_id));
+              return inst ? matchesClassification(inst, filterClassification) : false;
+            })
+          : list;
+
+        // Inject Government programs only when classification is All (empty) and on page 1,
+        // so users can see them without breaking backend pagination.
+        if (includeGovernment && !filterClassification && currentPage === 1) {
+          const govCourses = normalizeGovCourses();
+          // Put gov courses first.
+          setCourses([...govCourses, ...filtered]);
+        } else {
+          setCourses(filtered);
+        }
         setTotalPages(res.pagination?.total ? Math.ceil(res.pagination.total / pageSize) : 1);
       })
       .catch(() => {
         setError('Failed to load courses');
       })
       .finally(() => setLoading(false));
-  }, [currentPage, pageSize, filterInstitution, filterLevel, filterDeliveryMode, filterSpecialization, filterName, filterDuration, filterEligibility]);
+  }, [currentPage, pageSize, filterClassification, filterInstitution, filterLevel, filterDeliveryMode, filterSpecialization, filterName, filterDuration, filterEligibility, visibleInstitutions, institutions, governmentPrograms, governmentOfferings]);
 
 
 
@@ -130,137 +546,93 @@ const CoursesPage = () => {
 
       <div className="container mx-auto px-6 -mt-16 relative z-10">
 
-        {/* FILTER BAR */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow p-6 mb-10 flex flex-wrap gap-4 items-end">
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Institution</label>
-            <select
-              className="w-48 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
-              value={filterInstitution}
-              onChange={e => setFilterInstitution(e.target.value)}
-            >
-              <option value="">All</option>
-              {institutions.map(inst => (
-                <option key={inst._id} value={inst._id}>{inst.name}</option>
-              ))}
-            </select>
+        {/* FILTER BAR - Only Institution, Level, Specialization, Program Name */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow p-6 mb-10">
+          <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-end">
+            <div className="col-span-1">
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Classification</label>
+              <select
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
+                value={filterClassification}
+                onChange={e => setFilterClassification(e.target.value)}
+                disabled={instLoading || Boolean(instError)}
+              >
+                <option value="">All</option>
+                {classificationOptions
+                  .filter((c) => typeof c === 'string' && c.trim())
+                  .map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="col-span-1">
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Institution</label>
+              <select
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
+                value={filterInstitution}
+                onChange={e => setFilterInstitution(e.target.value)}
+              >
+                <option value="">All</option>
+                {visibleInstitutions.map(inst => (
+                  <option key={inst._id} value={inst._id}>{inst.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="col-span-1">
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Level</label>
+              <select
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
+                value={filterLevel}
+                onChange={e => setFilterLevel(e.target.value)}
+                disabled={scopedOptionsLoading && Boolean(filterInstitution)}
+              >
+                <option value="">All</option>
+                {visibleLevels.filter(lvl => typeof lvl === 'string' && lvl.trim()).map(lvl => (
+                  <option key={lvl} value={lvl}>{lvl}</option>
+                ))}
+              </select>
+            </div>
+            <div className="col-span-1">
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Specialization</label>
+              <select
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
+                value={filterSpecialization}
+                onChange={e => setFilterSpecialization(e.target.value)}
+                disabled={scopedOptionsLoading && Boolean(filterInstitution)}
+              >
+                <option value="">All</option>
+                {visibleSpecializations.filter(spec => typeof spec === 'string' && spec.trim()).map(spec => (
+                  <option key={spec} value={spec}>{spec}</option>
+                ))}
+              </select>
+            </div>
+            <div className="col-span-1 md:col-span-2">
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Program Name</label>
+              <input
+                type="text"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
+                placeholder="Search by name"
+                value={filterName}
+                onChange={e => setFilterName(e.target.value)}
+              />
+            </div>
+            <div className="col-span-1 flex md:justify-end">
+              <button
+                className="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-blue-50 hover:text-blue-700 transition-all w-full md:w-auto"
+                onClick={() => {
+                  setFilterClassification('');
+                  setFilterInstitution('');
+                  setFilterLevel('');
+                  setFilterSpecialization('');
+                  setFilterName('');
+                }}
+              >
+                Clear Filters
+              </button>
+            </div>
           </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Level</label>
-            <select
-              className="w-36 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
-              value={filterLevel}
-              onChange={e => setFilterLevel(e.target.value)}
-            >
-              <option value="">All</option>
-              {levels.filter(lvl => typeof lvl === 'string' && lvl.trim()).map(lvl => (
-                <option key={lvl} value={lvl}>{lvl}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Delivery Mode</label>
-            <select
-              className="w-36 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
-              value={filterDeliveryMode}
-              onChange={e => setFilterDeliveryMode(e.target.value)}
-            >
-              <option value="">All</option>
-              {deliveryModes.filter(mode => typeof mode === 'string' && mode.trim()).map(mode => (
-                <option key={mode} value={mode}>{mode}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Specialization</label>
-            <select
-              className="w-44 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
-              value={filterSpecialization}
-              onChange={e => setFilterSpecialization(e.target.value)}
-            >
-              <option value="">All</option>
-              {specializations.filter(spec => typeof spec === 'string' && spec.trim()).map(spec => (
-                <option key={spec} value={spec}>{spec}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Program Name</label>
-            <input
-              type="text"
-              className="w-48 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
-              placeholder="Search by name"
-              value={filterName}
-              onChange={e => setFilterName(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Duration</label>
-            <select
-              className="w-32 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
-              value={filterDuration}
-              onChange={e => setFilterDuration(e.target.value)}
-            >
-              <option value="">All</option>
-              {durations.filter(Boolean).map((dur, idx) => {
-                if (typeof dur === 'string') {
-                  return <option key={dur} value={dur}>{dur}</option>;
-                }
-                if (typeof dur === 'object' && dur !== null) {
-                  // Format object duration
-                  const { years, months, weeks } = dur;
-                  const label = [
-                    years ? `${years} year${years > 1 ? 's' : ''}` : null,
-                    months ? `${months} month${months > 1 ? 's' : ''}` : null,
-                    weeks ? `${weeks} week${weeks > 1 ? 's' : ''}` : null
-                  ].filter(Boolean).join(' ');
-                  const value = JSON.stringify(dur);
-                  return <option key={value} value={value}>{label || value}</option>;
-                }
-                return null;
-              })}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Eligibility</label>
-            <select
-              className="w-40 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
-              value={filterEligibility}
-              onChange={e => setFilterEligibility(e.target.value)}
-            >
-              <option value="">All</option>
-              {eligibilities.filter(el => typeof el === 'string' && el.trim()).map(el => (
-                <option key={el} value={el}>{el}</option>
-              ))}
-            </select>
-          </div>
-          {/* Per-page selector */}
-          <div className="ml-auto flex flex-col items-end">
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Per Page</label>
-            <select
-              className="w-24 bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"
-              value={pageSize}
-              onChange={e => setPageSize(Number(e.target.value))}
-            >
-              <option value={12}>12</option>
-              <option value={24}>24</option>
-              <option value={36}>36</option>
-            </select>
-          </div>
-          <button
-            className="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-blue-50 hover:text-blue-700 transition-all"
-            onClick={() => {
-              setFilterInstitution('');
-              setFilterLevel('');
-              setFilterDeliveryMode('');
-              setFilterSpecialization('');
-              setFilterName('');
-              setFilterDuration('');
-              setFilterEligibility('');
-            }}
-          >
-            Clear Filters
-          </button>
         </div>
 
         {loading ? (
@@ -272,7 +644,13 @@ const CoursesPage = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {courses.map((course, index) => {
                 // Show institution name from API
-                const inst = institutions.find(i => i._id === course.institution_id);
+                const inst = institutions.find((i) => String(i?._id) === String(course?.institution_id));
+                const institutionName =
+                  (inst?.name && String(inst.name).trim())
+                    ? String(inst.name)
+                    : (typeof (course as any)?.__institutionName === 'string' && (course as any).__institutionName.trim())
+                      ? (course as any).__institutionName.trim()
+                      : 'Unknown Institution';
                 // Use _id for key, fallback to index if missing
                 const key = course._id || course.id || index;
                 // Handle duration: if object, format as string
@@ -285,15 +663,32 @@ const CoursesPage = () => {
                     weeks ? `${weeks}w` : null
                   ].filter(Boolean).join(' ');
                 }
+                const courseId = extractId((course as any)?._id) ?? extractId((course as any)?.id) ?? '';
+                const hasCourseId = Boolean(courseId);
+
                 return (
-                  <div key={key} className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-8 hover:shadow-2xl transition-all duration-500 group flex flex-col h-full reveal">
-                    <div className="flex items-start justify-between mb-8">
+                  <div key={key} className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-8 hover:shadow-2xl transition-all duration-500 group flex flex-col h-full reveal relative">
+                    <div className="absolute top-6 right-6 flex flex-col items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => courseId && toggleSavedCourse(courseId)}
+                        className={`p-3 rounded-2xl backdrop-blur-md transition-all active:scale-90 ${courseId && savedCourses.includes(courseId) ? 'bg-primary-600 text-white' : 'bg-black/10 dark:bg-black/20 text-slate-700 dark:text-white/70 hover:bg-white/40'}`}
+                        aria-label={courseId && savedCourses.includes(courseId) ? 'Unsave course' : 'Save course'}
+                        title={courseId && savedCourses.includes(courseId) ? 'Saved' : 'Save'}
+                        disabled={!courseId}
+                      >
+                        <Bookmark size={20} className={courseId && savedCourses.includes(courseId) ? 'fill-current' : ''} />
+                      </button>
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-300 leading-none">
+                        Status
+                      </span>
+                      <span className="px-3 py-1 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest border border-emerald-500/20">
+                        Verified
+                      </span>
+                    </div>
+                    <div className="flex items-start mb-8">
                       <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
                         <BookOpen size={28} />
-                      </div>
-                      <div className="flex flex-col items-end">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-300 mb-1">Status</span>
-                        <span className="text-[10px] font-black uppercase text-emerald-500 tracking-tighter">Verified</span>
                       </div>
                     </div>
                     <div className="flex-1">
@@ -301,7 +696,7 @@ const CoursesPage = () => {
                         {course.name}
                       </h3>
                       <div className="flex items-center text-slate-400 font-bold text-[11px] uppercase tracking-wider mb-6">
-                        <MapPin size={14} className="mr-2 text-blue-500" /> {inst?.name}
+                        <MapPin size={14} className="mr-2 text-blue-500" /> {institutionName}
                       </div>
                       <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed mb-10 line-clamp-3 font-medium">
                         {course.description}
@@ -309,6 +704,9 @@ const CoursesPage = () => {
                       <div className="flex flex-wrap gap-2 mb-8">
                         <span className="px-4 py-2 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-xl border border-slate-100 dark:border-slate-800">
                           {course.level}
+                        </span>
+                        <span className="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest rounded-xl border border-emerald-100 dark:border-emerald-900/20">
+                          Verified
                         </span>
                         <span className="px-4 py-2 bg-blue-50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase tracking-widest rounded-xl border border-blue-100 dark:border-blue-900/20">
                           {(() => {
@@ -328,12 +726,16 @@ const CoursesPage = () => {
                       </div>
                     </div>
                     <div className="mt-auto pt-8 border-t border-slate-50 dark:border-slate-800 flex items-center justify-between">
-                      <Link
-                        to={`/courses/${course._id || course.id}`}
-                        className="flex items-center text-blue-600 text-[10px] font-black uppercase tracking-widest group/btn"
-                      >
-                        View Details <ArrowRight size={16} className="ml-2 group-hover/btn:translate-x-1 transition-transform" />
-                      </Link>
+                      {hasCourseId ? (
+                        <Link
+                          to={`/courses/${courseId}`}
+                          className="flex items-center text-blue-600 text-[10px] font-black uppercase tracking-widest group/btn"
+                        >
+                          View Details <ArrowRight size={16} className="ml-2 group-hover/btn:translate-x-1 transition-transform" />
+                        </Link>
+                      ) : (
+                        <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">View Details</span>
+                      )}
                     </div>
                   </div>
                 );

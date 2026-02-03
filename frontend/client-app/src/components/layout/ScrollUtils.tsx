@@ -11,13 +11,18 @@ export const ScrollToTop = () => {
 
 export const ForceHome = () => {
     const navigate = useNavigate();
+    const { pathname } = useLocation();
     useEffect(() => {
         const sessionKey = 'edupath_init_load_complete';
         if (!sessionStorage.getItem(sessionKey)) {
             sessionStorage.setItem(sessionKey, 'true');
-            navigate('/', { replace: true });
+            // Only force navigation when user is already on home.
+            // This avoids breaking deep links like /courses/:id on first load or refresh.
+            if (pathname === '/' || pathname === '') {
+                navigate('/', { replace: true });
+            }
         }
-    }, [navigate]);
+    }, [navigate, pathname]);
     return null;
 };
 

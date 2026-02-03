@@ -5,6 +5,7 @@ import '@mantine/core/styles.css';
 import App from './App';
 import { ClerkProvider } from '@clerk/clerk-react';
 import { dark } from '@clerk/themes';
+import { OpenAPI } from './types/core/OpenAPI';
 
 // Define your theme configuration
 const theme = createTheme({
@@ -30,6 +31,9 @@ const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 if (!PUBLISHABLE_KEY) {
   throw new Error("Missing Clerk Publishable Key");
 }
+
+// Backend main-service port can vary by environment (.env). Prefer VITE_API_BASE_URL, fallback to 2000.
+OpenAPI.BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:2000';
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(

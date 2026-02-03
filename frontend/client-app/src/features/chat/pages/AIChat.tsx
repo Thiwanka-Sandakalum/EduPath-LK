@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Send, Bot, User, Trash2, Plus, MessageSquare, Sparkles, RefreshCw, PanelLeftClose, PanelLeftOpen, Terminal, ExternalLink } from 'lucide-react';
 import { useAppStore } from '../../../context/AppContext';
-import { ChatSession, ChatMessage } from '../../../types';
+import type { ChatSession, ChatMessage } from '../../../types/chat';
 import { GoogleGenAI } from "@google/genai";
 
 // const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -10,19 +11,131 @@ const SYSTEM_INSTRUCTION = `You are the EduPath LK Assistant, an expert educatio
 Use Google Search grounding to provide the LATEST scholarship deadlines, university rankings, and UGC updates.
 Be concise and professional. If you use external information, the system will automatically handle the URLs.`;
 
+type CourseChatContext = {
+  courseId: string;
+  title: string;
+  description?: string;
+  level?: string;
+  field?: string;
+  institutionId?: string;
+  institutionName?: string;
+  classification?: 'Government' | 'Private' | 'Unknown';
+  governmentOfferings?: Array<{
+    universityId: string;
+    universityName: string;
+    proposedIntake?: number;
+    academicYear?: string;
+  }>;
+};
+
+const CHAT_CONTEXT_STORAGE_KEY = 'eduPath_chat_course_context_by_session';
+
+const loadContextMap = (): Record<string, CourseChatContext> => {
+  try {
+    const raw = localStorage.getItem(CHAT_CONTEXT_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const saveContextForSession = (sessionId: string, ctx: CourseChatContext) => {
+  if (!sessionId) return;
+  const map = loadContextMap();
+  map[sessionId] = ctx;
+  localStorage.setItem(CHAT_CONTEXT_STORAGE_KEY, JSON.stringify(map));
+};
+
+const getContextForSession = (sessionId: string | null): CourseChatContext | null => {
+  if (!sessionId) return null;
+  const map = loadContextMap();
+  const ctx = map[sessionId];
+  return ctx && typeof ctx === 'object' ? ctx : null;
+};
+
+const buildCourseContextInstruction = (ctx: CourseChatContext) => {
+  const lines: string[] = [];
+  lines.push('You are currently helping the user with questions about a specific course from EduPath LK.');
+  lines.push('Use ONLY the following course context as the authoritative course data (unless user explicitly asks for general information):');
+  lines.push(`Course ID: ${ctx.courseId}`);
+  lines.push(`Course Title: ${ctx.title}`);
+  if (ctx.classification) lines.push(`Classification: ${ctx.classification}`);
+  if (ctx.level) lines.push(`Level: ${ctx.level}`);
+  if (ctx.field) lines.push(`Field/Stream: ${ctx.field}`);
+  if (ctx.institutionName) lines.push(`Institution: ${ctx.institutionName}${ctx.institutionId ? ` (${ctx.institutionId})` : ''}`);
+  if (ctx.description) lines.push(`Description: ${ctx.description}`);
+  if (Array.isArray(ctx.governmentOfferings) && ctx.governmentOfferings.length) {
+    lines.push('Government Offerings (Universities):');
+    for (const o of ctx.governmentOfferings.slice(0, 30)) {
+      lines.push(`- ${o.universityName} (${o.universityId})${o.academicYear ? ` | Year: ${o.academicYear}` : ''}${typeof o.proposedIntake === 'number' ? ` | Intake: ${o.proposedIntake}` : ''}`);
+    }
+  }
+  lines.push('When the user asks questions, answer directly and include relevant facts from this context.');
+  lines.push('If the user asks something not covered by the context, ask a short clarifying question or say what info is missing.');
+  return lines.join('\n');
+};
+
 const AIChat = () => {
   const { user, chatSessions, saveChatSession, deleteChatSession } = useAppStore();
+  const location = useLocation();
   const [input, setInput] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [currentSources, setCurrentSources] = useState<{ title: string, uri: string }[]>([]);
 
+  const [activeCourseContext, setActiveCourseContext] = useState<CourseChatContext | null>(null);
+
+  const apiKey = (import.meta as any)?.env?.VITE_GEMINI_API_KEY as string | undefined;
+  const modelName = ((import.meta as any)?.env?.VITE_GEMINI_MODEL as string | undefined) || 'gemini-1.5-flash';
+
   const [activeSessionId, setActiveSessionId] = useState<string | null>(() =>
     chatSessions.length > 0 ? chatSessions[0].id : null
   );
 
   const activeSession = chatSessions.find(s => s.id === activeSessionId);
+
+  // If navigated from a Course Detail page, start a new chat with that course context.
+  useEffect(() => {
+    const state: any = (location as any)?.state;
+    const ctx: CourseChatContext | undefined = state?.courseContext;
+    const startNew: boolean = Boolean(state?.startNew);
+
+    if (!ctx || !ctx.courseId) return;
+
+    const newSessionId = Date.now().toString();
+    const newSession: ChatSession = {
+      id: newSessionId,
+      title: `Course: ${ctx.title || ctx.courseId}`,
+      date: 'Today',
+      messages: [
+        {
+          id: (Date.now() + 1).toString(),
+          role: 'bot',
+          text: `I’m ready. Ask me anything about “${ctx.title || ctx.courseId}”.`,
+          timestamp: new Date(),
+        },
+      ],
+    };
+
+    if (startNew) {
+      saveChatSession(newSession);
+      setActiveSessionId(newSessionId);
+      saveContextForSession(newSessionId, ctx);
+      setActiveCourseContext(ctx);
+    }
+
+    // Clear navigation state so refresh doesn't recreate sessions.
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    (window as any).history?.replaceState?.({}, document.title);
+  }, [location, saveChatSession]);
+
+  // Keep active course context in sync with active session
+  useEffect(() => {
+    const ctx = getContextForSession(activeSessionId);
+    setActiveCourseContext(ctx);
+  }, [activeSessionId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -66,40 +179,54 @@ const AIChat = () => {
     setCurrentSources([]);
 
     try {
-      // const result = await ai.models.generateContent({
-      //   model: 'gemini-3-flash-preview',
-      //   contents: updatedMessages.map(m => ({
-      //     role: m.role === 'bot' ? 'model' : 'user',
-      //     parts: [{ text: m.text }]
-      //   })),
-      //   config: {
-      //     systemInstruction: SYSTEM_INSTRUCTION,
-      //     tools: [{ googleSearch: {} }]
-      //   }
-      // });
+      if (!apiKey || !apiKey.trim()) {
+        const botMsg: ChatMessage = {
+          id: (Date.now() + 2).toString(),
+          role: 'bot',
+          text: 'AI is not configured. Set VITE_GEMINI_API_KEY in frontend/client-app and restart the dev server.',
+          timestamp: new Date(),
+        };
+        saveChatSession({
+          ...currentSession,
+          messages: [...updatedMessages, botMsg]
+        });
+        return;
+      }
 
-      // const botText = result.text || "I'm sorry, I couldn't process that.";
-      // const grounding = result.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-      // const sources = grounding
-      //   .filter((chunk: any) => chunk.web)
-      //   .map((chunk: any) => ({
-      //     title: chunk.web.title,
-      //     uri: chunk.web.uri
-      //   }));
+      const ai = new GoogleGenAI({ apiKey });
+      const botMsgId = (Date.now() + 2).toString();
+      saveChatSession({
+        ...currentSession,
+        messages: [...updatedMessages, { id: botMsgId, role: 'bot', text: '', timestamp: new Date() }]
+      });
 
-      // const botMsgId = (Date.now() + 1).toString();
-      // const botMsg: ChatMessage = {
-      //   id: botMsgId,
-      //   role: 'bot',
-      //   text: botText,
-      //   timestamp: new Date()
-      // };
+      const ctx = getContextForSession(sessionId);
+      const systemInstruction = ctx ? `${SYSTEM_INSTRUCTION}\n\n${buildCourseContextInstruction(ctx)}` : SYSTEM_INSTRUCTION;
 
-      // saveChatSession({
-      //   ...currentSession,
-      //   messages: [...updatedMessages, botMsg]
-      // });
-      // setCurrentSources(sources);
+      const history = updatedMessages.slice(-10).map(m => ({
+        role: m.role === 'bot' ? 'model' : 'user',
+        parts: [{ text: m.text }]
+      }));
+
+      const result = await ai.models.generateContentStream({
+        model: modelName,
+        contents: [
+          ...history,
+          { role: 'user', parts: [{ text: userPrompt }] }
+        ],
+        config: {
+          systemInstruction,
+        }
+      });
+
+      let botText = '';
+      for await (const chunk of result) {
+        botText += chunk.text;
+        saveChatSession({
+          ...currentSession,
+          messages: [...updatedMessages, { id: botMsgId, role: 'bot', text: botText, timestamp: new Date() }]
+        });
+      }
 
     } catch (error) {
       console.error("Gemini Error:", error);
@@ -170,6 +297,25 @@ const AIChat = () => {
             </div>
           </div>
         </header>
+
+        {activeCourseContext && (
+          <div className="px-6 md:px-12 py-4 border-b border-slate-100 dark:border-slate-800 bg-white/70 dark:bg-slate-950/70 backdrop-blur-xl">
+            <div className="max-w-3xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                Discussing: <span className="text-primary-600">{activeCourseContext.title}</span>
+                <span className="text-slate-400 font-black text-[11px] ml-2">({activeCourseContext.courseId})</span>
+              </div>
+              <div className="text-xs font-bold">
+                <Link
+                  to={`/courses/${activeCourseContext.courseId}`}
+                  className="text-primary-600 hover:text-primary-700 hover:underline"
+                >
+                  Back to course
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 md:px-12 py-12 scrollbar-hide" ref={scrollRef}>

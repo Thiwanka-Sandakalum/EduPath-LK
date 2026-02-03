@@ -9,7 +9,38 @@ import {
    ChevronRight, Fingerprint, ShieldCheck, HardHat, FileText, Building2
 } from 'lucide-react';
 import { useAuth0 } from '@auth0/auth0-react';
-import { StudentDetails, AdditionalEducation } from '../../../types';
+import type { StudentDetails, AdditionalEducation } from '../../../types/user';
+
+const PROFILE_STORAGE_KEY = 'eduPath_profile_student_details';
+const EDUCATION_STORAGE_KEY = 'eduPath_profile_additional_education';
+
+const SRI_LANKA_DISTRICTS = [
+   'Ampara',
+   'Anuradhapura',
+   'Badulla',
+   'Batticaloa',
+   'Colombo',
+   'Galle',
+   'Gampaha',
+   'Hambantota',
+   'Jaffna',
+   'Kalutara',
+   'Kandy',
+   'Kegalle',
+   'Kilinochchi',
+   'Kurunegala',
+   'Mannar',
+   'Matale',
+   'Matara',
+   'Monaragala',
+   'Mullaitivu',
+   'Nuwara Eliya',
+   'Polonnaruwa',
+   'Puttalam',
+   'Ratnapura',
+   'Trincomalee',
+   'Vavuniya',
+];
 
 const Profile = () => {
    const navigate = useNavigate();
@@ -17,7 +48,10 @@ const Profile = () => {
    const [loading, setLoading] = useState(false);
    const fileInputRef = useRef<HTMLInputElement>(null);
 
-   const { register, handleSubmit, setValue, formState: { errors } } = useForm<StudentDetails>();
+   const { register, handleSubmit, setValue, getValues, watch, formState: { errors } } = useForm<Partial<StudentDetails>>();
+
+   const watchedMobile = watch('mobile');
+   const watchedDistrict = watch('district');
 
    const [educationList, setEducationList] = useState<AdditionalEducation[]>([]);
    const [isAddingEdu, setIsAddingEdu] = useState(false);
@@ -36,14 +70,69 @@ const Profile = () => {
          navigate('/');
          return;
       }
-      // Optionally, setValue for other fields if you store them elsewhere
-      // Name/email are from Auth0 and not editable here
+      if (!isAuthenticated) return;
+
+      // Restore saved profile fields
+      try {
+         const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
+         if (raw) {
+            const saved = JSON.parse(raw) as Partial<StudentDetails>;
+            Object.entries(saved).forEach(([key, value]) => {
+               setValue(key as keyof StudentDetails, value as any);
+            });
+         }
+      } catch {
+         // ignore malformed storage
+      }
+
+      // Default full name (if not already saved)
+      if (user?.name) {
+         const currentFullName = getValues('fullName');
+         if (typeof currentFullName !== 'string' || !currentFullName.trim()) {
+            setValue('fullName', user.name);
+         }
+      }
+
+      // Restore saved additional education
+      try {
+         const rawEdu = localStorage.getItem(EDUCATION_STORAGE_KEY);
+         if (rawEdu) {
+            const savedEdu = JSON.parse(rawEdu) as AdditionalEducation[];
+            if (Array.isArray(savedEdu)) setEducationList(savedEdu);
+         }
+      } catch {
+         // ignore malformed storage
+      }
    }, [isAuthenticated, isLoading, navigate]);
 
-   const handleGeneralSubmit = (data: StudentDetails) => {
+   useEffect(() => {
+      if (!isAuthenticated) return;
+      try {
+         localStorage.setItem(EDUCATION_STORAGE_KEY, JSON.stringify(educationList));
+      } catch {
+         // ignore
+      }
+   }, [educationList, isAuthenticated]);
+
+   useEffect(() => {
+      if (!isAuthenticated) return;
+      // Auto-save form fields so the left summary and refresh stay in sync
+      try {
+         const current = getValues();
+         localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(current));
+      } catch {
+         // ignore
+      }
+   }, [watchedMobile, watchedDistrict, isAuthenticated, getValues]);
+
+   const handleGeneralSubmit = (data: Partial<StudentDetails>) => {
       setLoading(true);
       setTimeout(() => {
-         // You may want to store additional profile data in your own DB
+         try {
+            localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(data));
+         } catch {
+            // ignore
+         }
          setLoading(false);
          alert('Profile updated successfully!');
       }, 800);
@@ -105,7 +194,7 @@ const Profile = () => {
 
    const handleLogout = () => {
       if (window.confirm('Are you sure you want to log out?')) {
-         logout({ returnTo: window.location.origin });
+         logout({ logoutParams: { returnTo: window.location.origin } });
       }
    };
 
@@ -169,11 +258,11 @@ const Profile = () => {
                         <div className="w-full grid grid-cols-1 gap-2">
                            <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-xs font-bold text-slate-600 dark:text-slate-400 border border-transparent hover:border-slate-100 transition-all">
                               <Phone size={18} className="text-blue-500" />
-                              <span>{'No Mobile Registered'}</span>
+                              <span>{typeof watchedMobile === 'string' && watchedMobile.trim() ? watchedMobile : 'No Mobile Registered'}</span>
                            </div>
                            <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-xs font-bold text-slate-600 dark:text-slate-400 border border-transparent hover:border-slate-100 transition-all">
                               <MapPin size={18} className="text-blue-500" />
-                              <span>{'District Not Set'}</span>
+                              <span>{typeof watchedDistrict === 'string' && watchedDistrict.trim() ? watchedDistrict : 'District Not Set'}</span>
                            </div>
                            <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-xs font-bold text-slate-600 dark:text-slate-400 border border-transparent hover:border-slate-100 transition-all">
                               <ShieldCheck size={18} className="text-blue-500" />
@@ -232,9 +321,9 @@ const Profile = () => {
                               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2.5 ml-1">Resident District</label>
                               <select {...register("district")} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-blue-500 font-bold dark:text-white transition-all focus:bg-white appearance-none">
                                  <option value="">Choose District</option>
-                                 <option value="Colombo">Colombo</option>
-                                 <option value="Gampaha">Gampaha</option>
-                                 <option value="Kandy">Kandy</option>
+                                 {SRI_LANKA_DISTRICTS.map((d) => (
+                                    <option key={d} value={d}>{d}</option>
+                                 ))}
                               </select>
                            </div>
                         </div>

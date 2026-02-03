@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AppShell } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
@@ -17,8 +17,10 @@ import {
   SignedIn,
   SignedOut,
   SignIn,
-  UserButton
+  UserButton,
+  useAuth
 } from '@clerk/clerk-react';
+import { OpenAPI } from './types/core/OpenAPI';
 
 // Layout Component for Admin Pages
 const AdminLayout: React.FC = () => {
@@ -50,6 +52,15 @@ const AdminLayout: React.FC = () => {
 };
 
 const App: React.FC = () => {
+  const { getToken } = useAuth();
+
+  useEffect(() => {
+    OpenAPI.TOKEN = async () => {
+      const token = await getToken();
+      return token || '';
+    };
+  }, [getToken]);
+
   return (
     <ThemeProvider>
       {/* Clerk Auth Routing */}

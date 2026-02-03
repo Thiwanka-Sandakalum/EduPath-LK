@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, X, Send, User, Bot, Sparkles, Zap, Smartphone, RefreshCw, ChevronRight } from 'lucide-react';
-import { ChatMessage } from '../../../../types';
+import type { ChatMessage } from '../../../../types/chat';
 import { GoogleGenAI } from "@google/genai";
 
 // const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });

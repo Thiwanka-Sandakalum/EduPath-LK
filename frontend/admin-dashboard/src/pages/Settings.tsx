@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Title, Text, Group, Button, Tabs, TextInput, Avatar, Stack, Card, Switch, Select, FileInput, Box, Table, Badge, PasswordInput, Divider, ActionIcon } from '@mantine/core';
 import { User, Bell, Shield, CreditCard, Upload, Save, Check, Download, CreditCard as CardIcon } from 'lucide-react';
 import { useUser } from '@clerk/clerk-react';
@@ -6,6 +6,39 @@ import { useUser } from '@clerk/clerk-react';
 const Settings: React.FC = () => {
     const { user } = useUser();
     const [activeTab, setActiveTab] = useState<string | null>('general');
+
+    const fileInputRef = useRef<any>(null);
+    const [saved, setSaved] = useState(false);
+    const [profile, setProfile] = useState(() => ({
+        firstName: user?.firstName || '',
+        lastName: user?.lastName || '',
+        email: user?.primaryEmailAddress?.emailAddress || '',
+        role: 'Viewer',
+        avatar: user?.imageUrl || '',
+    }));
+
+    useEffect(() => {
+        setProfile((prev) => ({
+            ...prev,
+            firstName: user?.firstName || prev.firstName,
+            lastName: user?.lastName || prev.lastName,
+            email: user?.primaryEmailAddress?.emailAddress || prev.email,
+            avatar: user?.imageUrl || prev.avatar,
+        }));
+    }, [user]);
+
+    const handleAvatarChange = (file: File | null) => {
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        setProfile((prev) => ({ ...prev, avatar: url }));
+        setSaved(false);
+    };
+
+    const handleSave = () => {
+        // Placeholder: wire to backend/profile store later.
+        setSaved(true);
+        window.setTimeout(() => setSaved(false), 1500);
+    };
 
     return (
         <Stack>
