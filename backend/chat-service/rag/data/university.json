@@ -1,0 +1,319 @@
+[
+  {
+    "_id": "U_CMB",
+    "name": "University of Colombo",
+    "unicode_suffix": "A",
+    "type": "University",
+    "contact": {
+      "address": "94, Cumaratunga Munidasa Mawatha, Colombo 03",
+      "phone": [
+        "011-2581835",
+        "011-2584695",
+        "011-2585509"
+      ],
+      "website": "www.cmb.ac.lk"
+    },
+    "location": "Colombo",
+    "abbreviation": "A"
+  },
+  {
+    "_id": "U_PDN",
+    "name": "University of Peradeniya",
+    "unicode_suffix": "B",
+    "type": "University",
+    "contact": {
+      "address": "Peradeniya",
+      "phone": [
+        "081-2388301",
+        "081-2388302",
+        "081-2388303"
+      ],
+      "website": "www.pdn.ac.lk"
+    },
+    "location": "Peradeniya",
+    "abbreviation": "B"
+  },
+  {
+    "_id": "U_SJP",
+    "name": "University of Sri Jayewardenepura",
+    "unicode_suffix": "C",
+    "type": "University",
+    "contact": {
+      "address": "Gangodawila, Nugegoda",
+      "phone": [
+        "011-2802022",
+        "011-2801024",
+        "011-2758000"
+      ],
+      "website": "www.sjp.ac.lk"
+    },
+    "location": "Nugegoda",
+    "abbreviation": "C"
+  },
+  {
+    "_id": "U_KLN",
+    "name": "University of Kelaniya",
+    "unicode_suffix": "D",
+    "type": "University",
+    "contact": {
+      "address": "Dalugama, Kelaniya",
+      "phone": [
+        "011-2903903"
+      ],
+      "website": "www.kln.ac.lk"
+    },
+    "location": "Kelaniya",
+    "abbreviation": "D"
+  },
+  {
+    "_id": "U_UJA",
+    "name": "University of Jaffna",
+    "unicode_suffix": "E",
+    "type": "University",
+    "contact": {
+      "address": "P.O. Box 57, Thirunelvely, Jaffna",
+      "phone": [
+        "021-2222294",
+        "021-2218101"
+      ],
+      "website": "www.jfn.ac.lk"
+    },
+    "location": "Jaffna",
+    "abbreviation": "E"
+  },
+  {
+    "_id": "U_RUH",
+    "name": "University of Ruhuna",
+    "unicode_suffix": "F",
+    "type": "University",
+    "contact": {
+      "address": "Wellamadama, Matara",
+      "phone": [
+        "041-2222681",
+        "041-2222682"
+      ],
+      "website": "www.ruh.ac.lk"
+    },
+    "location": "Matara",
+    "abbreviation": "F"
+  },
+  {
+    "_id": "U_MRT",
+    "name": "University of Moratuwa",
+    "unicode_suffix": "G",
+    "type": "University",
+    "contact": {
+      "address": "Bandaranayake Mawatha, Moratuwa",
+      "phone": [
+        "011-2650301",
+        "011-2640051"
+      ],
+      "website": "www.mrt.ac.lk"
+    },
+    "location": "Moratuwa",
+    "abbreviation": "G"
+  },
+  {
+    "_id": "U_EUSL",
+    "name": "Eastern University, Sri Lanka",
+    "unicode_suffix": "H",
+    "type": "University",
+    "contact": {
+      "address": "Vantharamoolai, Chenkalady",
+      "phone": [
+        "065-2240490",
+        "065-2240590",
+        "065-2240580"
+      ],
+      "website": "www.esn.ac.lk"
+    },
+    "location": "Chenkalady",
+    "abbreviation": "H"
+  },
+  {
+    "_id": "U_SEUSL",
+    "name": "South Eastern University of Sri Lanka",
+    "unicode_suffix": "J",
+    "type": "University",
+    "contact": {
+      "address": "University Park, Oluvil",
+      "phone": [
+        "067-2255062",
+        "067-2255063",
+        "067-2255064"
+      ],
+      "website": "www.seu.ac.lk"
+    },
+    "location": "Oluvil",
+    "abbreviation": "J"
+  },
+  {
+    "_id": "U_RUSL",
+    "name": "Rajarata University of Sri Lanka",
+    "unicode_suffix": "K",
+    "type": "University",
+    "contact": {
+      "address": "Mihintale",
+      "phone": [
+        "025-2266643"
+      ],
+      "website": "www.rjt.ac.lk"
+    },
+    "location": "Mihintale",
+    "abbreviation": "K"
+  },
+  {
+    "_id": "U_SUSL",
+    "name": "Sabaragamuwa University of Sri Lanka",
+    "unicode_suffix": "L",
+    "type": "University",
+    "contact": {
+      "address": "P.O. Box 02, Pambahinna, Belihuloya",
+      "phone": [
+        "045-2280014",
+        "045-2280087"
+      ],
+      "website": "www.sab.ac.lk"
+    },
+    "location": "Belihuloya",
+    "abbreviation": "L"
+  },
+  {
+    "_id": "U_WUSL",
+    "name": "Wayamba University of Sri Lanka",
+    "unicode_suffix": "M",
+    "type": "University",
+    "contact": {
+      "address": "Lionel Jayathilake Mawatha, Kanadulla, Kuliyapitiya",
+      "phone": [
+        "037-2281414",
+        "037-2281412"
+      ],
+      "website": "www.wyb.ac.lk"
+    },
+    "location": "Kuliyapitiya",
+    "abbreviation": "M"
+  },
+  {
+    "_id": "U_GWUIM",
+    "name": "Gampaha Wickramarachchi University of Indigenous Medicine",
+    "unicode_suffix": "P",
+    "type": "University",
+    "contact": {
+      "address": "Yakkala",
+      "phone": [
+        "033-2222748"
+      ],
+      "website": "www.gwu.ac.lk"
+    },
+    "location": "Yakkala",
+    "abbreviation": "P"
+  },
+  {
+    "_id": "U_UOV",
+    "name": "University of Vavuniya, Sri Lanka",
+    "unicode_suffix": "R",
+    "type": "University",
+    "contact": {
+      "address": "Pampaaimadu, Vavuniya",
+      "phone": [
+        "024-2222265",
+        "024-2222264"
+      ],
+      "website": "www.vau.ac.lk"
+    },
+    "location": "Vavuniya",
+    "abbreviation": "R"
+  },
+  {
+    "_id": "U_SP",
+    "name": "Sripalee Campus, University of Colombo",
+    "unicode_suffix": "S",
+    "type": "Campus",
+    "contact": {
+      "address": "Wewala, Horana",
+      "phone": [
+        "034-2263616"
+      ],
+      "website": "www.spc.cmb.ac.lk"
+    },
+    "location": "Horana",
+    "abbreviation": "S"
+  },
+  {
+    "_id": "U_UCSC",
+    "name": "University of Colombo School of Computing",
+    "unicode_suffix": "T",
+    "type": "Institute",
+    "contact": {
+      "address": "No 35, Reid Avenue, Colombo 07",
+      "phone": [
+        "011-2581245",
+        "011-2581247"
+      ],
+      "website": "ucsc.cmb.ac.lk"
+    },
+    "location": "Colombo",
+    "abbreviation": "T"
+  },
+  {
+    "_id": "U_UWU",
+    "name": "Uva Wellassa University of Sri Lanka",
+    "unicode_suffix": "U",
+    "type": "University",
+    "contact": {
+      "address": "2nd Milepost, Passara Road, Badulla",
+      "phone": [
+        "055-2226622"
+      ],
+      "website": "www.uwu.ac.lk"
+    },
+    "location": "Badulla",
+    "abbreviation": "U"
+  },
+  {
+    "_id": "U_TRINCO",
+    "name": "Trincomalee Campus, Eastern University",
+    "unicode_suffix": "W",
+    "type": "Campus",
+    "contact": {
+      "address": "Konesapuri, Nilavely, Trincomalee",
+      "phone": [
+        "026-2227410"
+      ],
+      "website": "www.tc.esn.ac.lk"
+    },
+    "location": "Trincomalee",
+    "abbreviation": "W"
+  },
+  {
+    "_id": "U_SVIAS",
+    "name": "Swamy Vipulananda Institute of Aesthetic Studies",
+    "unicode_suffix": "Y",
+    "type": "Institute",
+    "contact": {
+      "address": "Kallady, Batticaloa",
+      "phone": [
+        "065-2225689"
+      ],
+      "website": "www.svias.esn.ac.lk"
+    },
+    "location": "Batticaloa",
+    "abbreviation": "Y"
+  },
+  {
+    "_id": "U_UVPA",
+    "name": "University of the Visual & Performing Arts",
+    "unicode_suffix": "Z",
+    "type": "University",
+    "contact": {
+      "address": "21, Albert Crescent, Colombo 07",
+      "phone": [
+        "011-2033710"
+      ],
+      "website": "www.vpa.ac.lk"
+    },
+    "location": "Colombo",
+    "abbreviation": "Z"
+  }
+]
