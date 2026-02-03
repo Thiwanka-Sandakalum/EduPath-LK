@@ -1,9 +1,8 @@
-import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import Navbar from './components/layout/Navbar/Navbar';
 import ChatWidget from './features/chat/components/ChatWidget/ChatWidget';
-
 import Home from './pages/HomePage';
 import InstitutionsPage from './features/institutions/pages/InstitutionsPage';
 import InstitutionDetail from './features/institutions/components/InstitutionDetail/InstitutionDetail';
@@ -19,21 +18,75 @@ import Profile from './features/user-profile/pages/Profile';
 import Settings from './features/user-profile/pages/Settings';
 import Dashboard from './features/dashboard/pages/Dashboard';
 import AIChat from './features/chat/pages/AIChat';
+import Loans from './features/loans/Loans';
 import { useAuth0 } from '@auth0/auth0-react';
 import { ScrollToTop, ForceHome, ScrollObserver } from './components/layout/ScrollUtils';
 import MainLayout from './components/layout/MainLayout';
 import Footer from './components/layout/Footer';
 import { OpenAPI } from './types';
+import { LoadingScreen } from './components';
+
+const CourseDetailRoute = () => {
+  const { id } = useParams();
+  return <CourseDetail key={id || 'course'} />;
+};
 
 
 
 const App = () => {
+  const [bootComplete, setBootComplete] = useState(false);
   const {
     isLoading,
     isAuthenticated,
     error,
-    loginWithRedirect: login
+    loginWithRedirect: login,
+    user,
   } = useAuth0();
+
+  const handleBootFinished = useCallback(() => {
+    setBootComplete(true);
+  }, []);
+
+  // Keep a lightweight registry of logged-in students so Admin can show them.
+  // NOTE: This is browser localStorage (per-origin). If admin and client are on different domains/ports,
+  // they won't share this data.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const email = (user as any)?.email;
+    if (typeof email !== 'string' || !email.trim()) return;
+
+    try {
+      const raw = localStorage.getItem('eduPath_registry');
+      const current = raw ? JSON.parse(raw) : [];
+      const users = Array.isArray(current) ? current : [];
+
+      let studentDetails: any = undefined;
+      try {
+        const profileRaw = localStorage.getItem('eduPath_profile_student_details');
+        if (profileRaw) studentDetails = JSON.parse(profileRaw);
+      } catch {
+        // ignore
+      }
+
+      const nextUser = {
+        ...users.find((u: any) => u?.email === email),
+        name: (user as any)?.name || email,
+        email,
+        avatarUrl: (user as any)?.picture,
+        provider: 'auth0',
+        ...(studentDetails ? { studentDetails } : {}),
+      };
+
+      const next = [
+        nextUser,
+        ...users.filter((u: any) => u?.email !== email),
+      ];
+
+      localStorage.setItem('eduPath_registry', JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  }, [isAuthenticated, user]);
 
 
   OpenAPI.BASE = (window as any).config.BASE_API_URL;
@@ -58,10 +111,13 @@ const App = () => {
     }
   }, [isLoading, isAuthenticated, error, login]);
 
-  if (isLoading) return "Loading...";
+  if (isLoading || !bootComplete) {
+    return <LoadingScreen onFinished={handleBootFinished} />;
+  }
 
   if (error) {
-    if (error.error === 'rate_limit') {
+    const auth0ErrorCode = (error as any)?.error;
+    if (auth0ErrorCode === 'rate_limit') {
       return (
         <div style={{ padding: 32, textAlign: 'center', color: 'red' }}>
           <h2>Too Many Requests</h2>
@@ -78,7 +134,7 @@ const App = () => {
   }
 
   if (!isAuthenticated) {
-    return <div>Redirecting to login...</div>;
+    return <LoadingScreen onFinished={handleBootFinished} />;
   }
 
   return (
@@ -95,7 +151,7 @@ const App = () => {
               <Route path="/institutions" element={<InstitutionsPage />} />
               <Route path="/institutions/:id" element={<InstitutionDetail />} />
               <Route path="/courses" element={<CoursesPage />} />
-              <Route path="/courses/:id" element={<CourseDetail />} />
+              <Route path="/courses/:id" element={<CourseDetailRoute />} />
               <Route path="/scholarships" element={<ScholarshipsPage />} />
               <Route path="/tools" element={<Tools />} />
               <Route path="/blog" element={<Blog />} />
@@ -107,6 +163,7 @@ const App = () => {
               <Route path="/settings" element={<Settings />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/chat" element={<AIChat />} />
+              <Route path="/loans" element={<Loans />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </MainLayout>

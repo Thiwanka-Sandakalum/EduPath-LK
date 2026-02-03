@@ -1,11 +1,125 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { institutions, courses } from '../../../../data/mockData';
 import { useAppStore } from '../../../../context/AppContext';
 import { MapPin, Phone, Globe, Mail, CheckCircle, Clock, ArrowLeft, X, Share2, Star, BookOpen, Users, Calendar } from 'lucide-react';
+import { InstitutionsService } from '../../../../types/services/InstitutionsService';
+import { ProgramsService } from '../../../../types/services/ProgramsService';
+import type { Institution } from '../../../../types/models/Institution';
+import type { Program } from '../../../../types/models/Program';
 import { useForm } from 'react-hook-form';
 import { Link } from 'react-router-dom'; // Keep this only for programs linking
+
+type GovernmentDegreeProgram = {
+   _id: string;
+   title?: string;
+   name?: string;
+   stream?: string;
+   duration_years?: number;
+   medium_of_instruction?: string;
+   description?: string;
+   al_requirements?: any;
+   ol_requirements?: any;
+   aptitude_test_required?: boolean;
+};
+
+type GovernmentCourseOffering = {
+   degree_program_id: string;
+   university_id: string;
+   proposed_intake?: number;
+   cutoff_marks?: Record<string, string | number | null | undefined>;
+   academic_year?: string;
+};
+
+const safeJsonFetch = async (url: string) => {
+   const res = await fetch(url, { headers: { Accept: 'application/json' } });
+   if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
+   const text = await res.text();
+   const cleaned = text.replace(/^\uFEFF/, '');
+   return JSON.parse(cleaned);
+};
+
+const extractArrayFromJson = (json: any, keys: string[]): any[] => {
+   if (Array.isArray(json)) return json;
+   if (!json || typeof json !== 'object') return [];
+   for (const k of keys) {
+      const v = (json as any)[k];
+      if (Array.isArray(v)) return v;
+   }
+   return [];
+};
+
+type GovernmentInstitutionJson = {
+   id?: string;
+   _id?: string;
+   name: string;
+   unicode_suffix?: string;
+   abbreviation?: string;
+   description?: string;
+   type?: string[] | string;
+   country?: string;
+   website?: string;
+   image_url?: string;
+   recognition?: any;
+   contact_info?: any;
+   contact?: {
+      address?: string;
+      phone?: string[];
+      website?: string;
+   };
+   location?: string;
+   programs?: any;
+};
+
+function normalizeGovernmentJson(payload: any): GovernmentInstitutionJson[] {
+   if (!payload) return [];
+   if (Array.isArray(payload)) return payload as GovernmentInstitutionJson[];
+   if (Array.isArray(payload.institutions)) return payload.institutions as GovernmentInstitutionJson[];
+   if (Array.isArray(payload.items)) return payload.items as GovernmentInstitutionJson[];
+   return [];
+}
+
+function normalizeWebsiteUrl(value: unknown): string | undefined {
+   const raw = typeof value === 'string' ? value.trim() : '';
+   if (!raw) return undefined;
+   if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+   return `https://${raw}`;
+}
+
+function toApiInstitutionLike(gov: GovernmentInstitutionJson): Institution {
+   const id = String(gov._id ?? gov.id ?? '').trim() || `gov-${gov.name}`;
+   const now = new Date().toISOString();
+   const typeArray = Array.isArray(gov.type) ? gov.type : gov.type ? [String(gov.type)] : ['Government'];
+   const website =
+      normalizeWebsiteUrl(gov.website) ??
+      normalizeWebsiteUrl(gov.contact?.website);
+
+   const contactInfo = (gov as any).contact_info ?? {
+      address: gov.contact?.address,
+      phone: gov.contact?.phone,
+      website,
+      location: gov.location,
+   };
+
+   const description =
+      gov.description ??
+      (gov.location ? `${gov.name} is a government institution located in ${gov.location}.` : `${gov.name} is a government institution in Sri Lanka.`);
+
+   return {
+      _id: id,
+      name: gov.name,
+      description,
+      website,
+      country: gov.country ?? 'Sri Lanka',
+      image_url: gov.image_url,
+      type: typeArray,
+      recognition: (gov as any).recognition,
+      contact_info: contactInfo,
+      confidence_score: 1,
+      created_at: now,
+      updated_at: now,
+   };
+}
 
 const InstitutionDetail = () => {
    const { id } = useParams();
@@ -13,9 +127,139 @@ const InstitutionDetail = () => {
    const [activeTab, setActiveTab] = useState<'overview' | 'programs' | 'contact'>('overview');
    const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
 
-   const institution = institutions.find(i => i.id === id);
-   const instCourses = courses.filter(c => c.institutionId === id);
+   const [institution, setInstitution] = useState<Institution | null>(null);
+   const [instCourses, setInstCourses] = useState<Program[]>([]);
+   const [loading, setLoading] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+
    const isSaved = id && savedInstitutions.includes(id);
+
+   const extractId = (value: unknown): string | null => {
+      if (typeof value === 'string') {
+         const trimmed = value.trim();
+         if (!trimmed || trimmed === 'undefined' || trimmed === 'null') return null;
+         if (trimmed.includes('[object Object]')) return null;
+         return trimmed;
+      }
+      if (value && typeof value === 'object') {
+         const v: any = value;
+         const candidate = v.$oid ?? v.oid ?? v.id ?? v._id;
+         return extractId(candidate);
+      }
+      return null;
+   };
+
+   useEffect(() => {
+      if (!id) return;
+      let cancelled = false;
+      const fetchInstitution = async () => {
+         setLoading(true);
+         setError(null);
+         try {
+            const res = await InstitutionsService.getInstitution(id);
+            if (!cancelled) setInstitution(res);
+         } catch (err: any) {
+            // Fallback: government institutions stored as static JSON (no backend record)
+            try {
+               const r = await fetch('/government-institutions.json');
+               if (!r.ok) throw new Error('No government institutions JSON');
+               const json = await r.json();
+               const list = normalizeGovernmentJson(json);
+               const found = list.find((x) => String(x?._id ?? x?.id ?? '').trim() === String(id));
+               if (found) {
+                  if (!cancelled) setInstitution(toApiInstitutionLike(found));
+               } else {
+                  if (!cancelled) setError(err?.message || 'Failed to load institution');
+               }
+            } catch {
+               if (!cancelled) setError(err?.message || 'Failed to load institution');
+            }
+         } finally {
+            if (!cancelled) setLoading(false);
+         }
+      };
+      const fetchPrograms = async () => {
+         const loadGovernmentProgramsForUniversity = async (universityId: string) => {
+            const [programsJson, offeringsJson] = await Promise.all([
+               safeJsonFetch('/government-degree-programs.json'),
+               safeJsonFetch('/government-course-offerings.json'),
+            ]);
+
+            const programsRaw = extractArrayFromJson(programsJson, ['degreePrograms', 'degree_programs', 'programs', 'data']);
+            const offeringsRaw = extractArrayFromJson(offeringsJson, ['offerings', 'course_offerings', 'data']);
+
+            const programs = programsRaw
+               .filter((p: any) => p && typeof p === 'object' && typeof p._id === 'string') as GovernmentDegreeProgram[];
+            const programsById = new Map<string, GovernmentDegreeProgram>();
+            for (const p of programs) programsById.set(String(p._id), p);
+
+            const offerings = offeringsRaw
+               .filter((o: any) => o && typeof o === 'object' && typeof o.degree_program_id === 'string' && typeof o.university_id === 'string')
+               .map((o: any) => ({
+                  degree_program_id: String(o.degree_program_id),
+                  university_id: String(o.university_id),
+                  proposed_intake: typeof o.proposed_intake === 'number' ? o.proposed_intake : undefined,
+                  cutoff_marks: o.cutoff_marks && typeof o.cutoff_marks === 'object' ? o.cutoff_marks : undefined,
+                  academic_year: typeof o.academic_year === 'string' ? o.academic_year : undefined,
+               })) as GovernmentCourseOffering[];
+
+            const programIds = new Set(
+               offerings
+                  .filter((o) => String(o.university_id) === String(universityId))
+                  .map((o) => o.degree_program_id)
+                  .filter(Boolean)
+            );
+
+            if (!programIds.size) return [] as Program[];
+
+            const mapped: Program[] = Array.from(programIds)
+               .map((pid) => programsById.get(String(pid)))
+               .filter(Boolean)
+               .map((p: any) => {
+                  const title = p.title || p.name || p._id;
+                  return {
+                     _id: p._id as any,
+                     name: title as any,
+                     description: (p.description || 'Government university degree program.') as any,
+                     level: 'Undergraduate' as any,
+                     institution_id: universityId as any,
+                     duration: typeof p.duration_years === 'number' ? ({ years: p.duration_years } as any) : (undefined as any),
+                     fees: 'Free' as any,
+                  } as any;
+               })
+               .sort((a: any, b: any) => String(a?.name || '').localeCompare(String(b?.name || '')));
+
+            return mapped;
+         };
+
+         try {
+            const res = await ProgramsService.listInstitutionPrograms(id, 1, 1000);
+            const apiList = (res.data ?? []) as Program[];
+            if (!cancelled) setInstCourses(apiList);
+
+            // If backend returns empty for a government institution ID, try JSON fallback.
+            if (!cancelled && (!apiList || apiList.length === 0)) {
+               try {
+                  const govList = await loadGovernmentProgramsForUniversity(id);
+                  if (!cancelled && govList.length > 0) setInstCourses(govList);
+               } catch {
+                  // ignore
+               }
+            }
+         } catch (err) {
+            // Fallback: government courses are stored as static JSON
+            try {
+               const govList = await loadGovernmentProgramsForUniversity(id);
+               if (!cancelled) setInstCourses(govList);
+            } catch {
+               // ignore
+            }
+         }
+      };
+      fetchInstitution();
+      fetchPrograms();
+      return () => { cancelled = true; };
+   }, [id]);
 
    useEffect(() => {
       if (id) addRecentlyViewed(id);
@@ -23,12 +267,28 @@ const InstitutionDetail = () => {
 
    const { register, handleSubmit, reset, formState: { errors } } = useForm();
 
+   const contact = institution?.contact_info as any;
+   const addressText = Array.isArray(contact)
+      ? contact?.[0]
+      : contact?.address || contact?.location || '';
+   const phoneValue = Array.isArray(contact)
+      ? contact?.[1]
+      : Array.isArray(contact?.phone)
+         ? contact.phone[0]
+         : contact?.phone;
+   const emailValue = Array.isArray(contact)
+      ? contact?.[2]
+      : contact?.email;
+   const websiteValue = institution?.website;
+
+   if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-500">Loading institution...</div>;
+   if (error) return <div className="min-h-screen flex items-center justify-center text-red-500">{error}</div>;
    if (!institution) return <div className="min-h-screen flex items-center justify-center text-slate-500">Institution not found</div>;
 
    const onRequestSubmit = (data: any) => {
       addInquiry({
          id: Date.now().toString(),
-         entityId: institution.id,
+         entityId: institution._id,
          entityName: institution.name,
          message: data.message,
          sentAt: new Date().toISOString()
@@ -42,13 +302,18 @@ const InstitutionDetail = () => {
       <div className="bg-white min-h-screen font-sans pb-20">
 
          {/* 1. IMMERSIVE HERO SECTION */}
-         <div className="relative h-[400px] w-full group overflow-hidden">
-
-            <img
-               src={institution.imageUrl}
-               alt={institution.name}
-               className="w-full h-full object-cover transition-transform duration-[2s] ease-out scale-105 group-hover:scale-100"
-            />
+         <div className="relative h-[400px] w-full group overflow-hidden bg-slate-100 flex items-center justify-center">
+            {institution.image_url ? (
+               <img
+                  src={institution.image_url}
+                  alt={institution.name}
+                  className="absolute inset-0 w-full h-full object-cover"
+               />
+            ) : (
+               <span className="text-6xl font-black text-primary-600 dark:text-primary-400 select-none">
+                  {institution.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
+               </span>
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent opacity-90"></div>
 
             {/* Hero Content */}
@@ -57,20 +322,15 @@ const InstitutionDetail = () => {
                   <div className="flex flex-col md:flex-row items-end justify-between gap-6">
                      <div className="reveal">
                         <div className="flex items-center gap-3 mb-4">
-                           <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider text-white shadow-sm border border-white/20 backdrop-blur-md
-                      ${institution.type === 'Government' ? 'bg-purple-600/80' : 'bg-blue-600/80'}`}>
-                              {institution.type}
+                           <span className="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider text-white shadow-sm border border-white/20 backdrop-blur-md bg-blue-600/80">
+                              {Array.isArray(institution.type) ? institution.type.join(', ') : institution.type}
                            </span>
-                           <div className="flex items-center text-amber-400 bg-black/30 px-3 py-1.5 rounded-full backdrop-blur-md border border-white/10">
-                              <Star size={14} className="fill-current mr-1.5" />
-                              <span className="text-white text-xs font-bold">{institution.rating} Rating</span>
-                           </div>
                         </div>
                         <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-2 tracking-tight shadow-sm leading-tight">
                            {institution.name}
                         </h1>
                         <div className="flex items-center text-lg text-slate-200 font-medium">
-                           <MapPin size={20} className="mr-2 text-blue-400" /> {institution.location}
+                           <MapPin size={20} className="mr-2 text-blue-400" /> {addressText ? String(addressText) : ''}
                         </div>
                      </div>
 
@@ -124,48 +384,34 @@ const InstitutionDetail = () => {
                            <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center">
                               <BookOpen className="mr-3 text-blue-600" /> About the Institution
                            </h2>
-                           <p className="text-slate-600 leading-8 text-lg">{institution.overview}</p>
-                        </section>
-
-                        {/* Key Stats Grid */}
-                        <section className="grid grid-cols-2 md:grid-cols-4 gap-4 reveal">
-                           {[
-                              { label: 'Established', val: institution.established, icon: <Calendar /> },
-                              { label: 'Students', val: institution.studentCount, icon: <Users /> },
-                              { label: 'Courses', val: `${instCourses.length}+`, icon: <BookOpen /> },
-                              { label: 'Type', val: institution.type, icon: <Globe /> }
-                           ].map((s, i) => (
-                              <div key={i} className="bg-slate-50 p-6 rounded-2xl border border-slate-100 text-center hover:border-blue-200 transition-colors group">
-                                 <div className="inline-flex p-3 bg-white rounded-full text-slate-400 mb-3 shadow-sm group-hover:text-blue-600 transition-colors">
-                                    {React.cloneElement(s.icon as any, { size: 20 })}
-                                 </div>
-                                 <div className="font-bold text-slate-900 text-lg">{s.val}</div>
-                                 <div className="text-xs text-slate-500 uppercase tracking-wider font-bold mt-1">{s.label}</div>
+                           <p className="text-slate-600 leading-8 text-lg mb-6">{institution.description}</p>
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                              <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+                                 <div className="font-bold text-slate-700 mb-2">Institution Code</div>
+                                 <div className="text-slate-500">{institution.institution_code}</div>
                               </div>
-                           ))}
+                              <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+                                 <div className="font-bold text-slate-700 mb-2">Country</div>
+                                 <div className="text-slate-500">{institution.country}</div>
+                              </div>
+                           </div>
                         </section>
-
                         <section className="reveal">
                            <h2 className="text-2xl font-bold text-slate-900 mb-6">Accreditations & Recognition</h2>
                            <div className="flex flex-wrap gap-3">
-                              {institution.accreditation.map(acc => (
-                                 <div key={acc} className="flex items-center bg-white border border-slate-200 px-5 py-3 rounded-xl shadow-sm">
-                                    <div className="bg-emerald-100 text-emerald-600 p-1 rounded-full mr-3"><CheckCircle size={16} /></div>
-                                    <span className="font-medium text-slate-700">{acc}</span>
-                                 </div>
-                              ))}
-                           </div>
-                        </section>
-
-                        <section className="bg-slate-50 rounded-3xl p-8 border border-slate-200 reveal">
-                           <h2 className="text-xl font-bold text-slate-900 mb-6">Facilities & Campus</h2>
-                           <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8">
-                              {institution.facilities?.map(f => (
-                                 <div key={f} className="flex items-center text-slate-700">
-                                    <span className="w-2 h-2 bg-blue-500 rounded-full mr-3"></span>
-                                    {f}
-                                 </div>
-                              ))}
+                              {Array.isArray(institution.recognition)
+                                 ? institution.recognition.map(acc => (
+                                    <div key={acc} className="flex items-center bg-white border border-slate-200 px-5 py-3 rounded-xl shadow-sm">
+                                       <div className="bg-emerald-100 text-emerald-600 p-1 rounded-full mr-3"><CheckCircle size={16} /></div>
+                                       <span className="font-medium text-slate-700">{acc}</span>
+                                    </div>
+                                 ))
+                                 : (
+                                    <div className="flex items-center bg-white border border-slate-200 px-5 py-3 rounded-xl shadow-sm">
+                                       <div className="bg-emerald-100 text-emerald-600 p-1 rounded-full mr-3"><CheckCircle size={16} /></div>
+                                       <span className="font-medium text-slate-700">{institution.recognition}</span>
+                                    </div>
+                                 )}
                            </div>
                         </section>
                      </div>
@@ -175,120 +421,113 @@ const InstitutionDetail = () => {
                      <div className="space-y-6 animate-fade-in">
                         <div className="flex justify-between items-end mb-6 reveal">
                            <div>
-                              <h2 className="text-2xl font-bold text-slate-900">Available Programs</h2>
-                              <p className="text-slate-500 mt-1">Explore degrees and diplomas offered.</p>
+                              <h2 className="text-2xl font-bold text-slate-900">Programs Offered</h2>
+                              <p className="text-slate-500 mt-1">All programs and short courses available at this institution.</p>
                            </div>
-                           <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-sm font-bold">{instCourses.length} Courses</span>
+                           <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-sm font-bold">{instCourses.length || (Array.isArray(institution.programs) ? institution.programs.length : 0)} Programs</span>
                         </div>
-
-                        {instCourses.length === 0 ? (
-                           <div className="text-center py-16 bg-slate-50 rounded-3xl border border-dashed border-slate-300">
-                              <p className="text-slate-500 font-medium">No active courses listed at the moment.</p>
-                           </div>
-                        ) : (
-                           <div className="grid grid-cols-1 gap-4">
-                              {instCourses.map((course, index) => (
-                                 <Link to={`/courses/${course.id}`} key={course.id} className={`group bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-lg hover:border-blue-300 transition-all duration-300 flex flex-col md:flex-row gap-6 reveal ${index % 2 !== 0 ? 'reveal-delay-100' : ''}`}>
-                                    <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 font-bold text-xl flex-shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                       {course.title.charAt(0)}
-                                    </div>
-                                    <div className="flex-1">
-                                       <div className="flex flex-col md:flex-row md:items-center justify-between mb-2">
-                                          <h3 className="text-lg font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{course.title}</h3>
-                                          <span className="inline-block bg-slate-100 text-slate-600 text-xs font-bold px-3 py-1 rounded-full uppercase w-fit mt-2 md:mt-0">{course.level}</span>
+                        {instCourses.length > 0 ? (
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              {instCourses.map((prog) => {
+                                 const progId = extractId((prog as any)?._id) ?? extractId((prog as any)?.id);
+                                 const href = progId ? `/courses/${progId}` : `/courses?q=${encodeURIComponent(prog.name)}`;
+                                 return (
+                                    <Link
+                                       to={href}
+                                       key={String(progId ?? prog.name)}
+                                       className="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
+                                    >
+                                       <div className="flex items-center gap-3 mb-2">
+                                          <BookOpen className="text-blue-500" />
+                                          <span className="font-bold text-lg text-slate-800">{prog.name}</span>
                                        </div>
-                                       <p className="text-slate-500 text-sm line-clamp-2 mb-4">{course.description}</p>
-                                       <div className="flex items-center gap-6 text-sm font-medium text-slate-500">
-                                          <span className="flex items-center"><Clock size={16} className="mr-2 text-slate-400" /> {course.duration}</span>
-                                          <span className="flex items-center"><Calendar size={16} className="mr-2 text-slate-400" /> {course.deadline}</span>
-                                       </div>
-                                    </div>
-                                    <div className="flex items-center justify-center border-l border-slate-100 pl-6 md:w-32">
-                                       <span className="text-blue-600 text-sm font-bold flex items-center group-hover:translate-x-1 transition-transform">
-                                          Details <ArrowLeft className="rotate-180 ml-2 h-4 w-4" />
+                                       {prog.level ? (
+                                          <span className="text-slate-600 text-sm font-semibold">{prog.level}</span>
+                                       ) : null}
+                                       <span className="text-slate-500 text-sm line-clamp-2">
+                                          {prog.description || `A recognized program at ${institution.name}. Click to view course details.`}
                                        </span>
+                                    </Link>
+                                 );
+                              })}
+                           </div>
+                        ) : Array.isArray(institution.programs) && institution.programs.length > 0 ? (
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              {institution.programs.map((prog, idx) => (
+                                 <Link
+                                    key={idx}
+                                    to={`/courses?q=${encodeURIComponent(prog)}`}
+                                    className="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
+                                 >
+                                    <div className="flex items-center gap-3 mb-2">
+                                       <BookOpen className="text-blue-500" />
+                                       <span className="font-bold text-lg text-slate-800">{prog}</span>
                                     </div>
+                                    <span className="text-slate-500 text-sm">Search this course in Courses.</span>
                                  </Link>
                               ))}
+                           </div>
+                        ) : (
+                           <div className="text-center py-16 bg-slate-50 rounded-3xl border border-dashed border-slate-300">
+                              <p className="text-slate-500 font-medium">No programs listed at the moment.</p>
                            </div>
                         )}
                      </div>
                   )}
 
                   {activeTab === 'contact' && (
-                     <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden animate-fade-in shadow-sm reveal">
-                        <div className="p-8 md:p-12 bg-slate-50 border-b border-slate-200 text-center">
-                           <h2 className="text-2xl font-bold text-slate-900 mb-2">Get in Touch</h2>
-                           <p className="text-slate-500">Contact the admission office directly.</p>
-                        </div>
-                        <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100">
-                           <div className="p-8 text-center hover:bg-slate-50 transition-colors">
-                              <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                                 <Phone size={24} />
-                              </div>
-                              <h3 className="font-bold text-slate-900 mb-1">Phone</h3>
-                              <p className="text-slate-500 mb-3 text-sm">Mon-Fri from 8am to 5pm</p>
-                              <a href={`tel:${institution.contact.phone}`} className="text-blue-600 font-bold hover:underline">{institution.contact.phone}</a>
+                     <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden animate-fade-in shadow-sm reveal p-10 max-w-2xl mx-auto">
+                        <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center"><Mail className="mr-3 text-blue-600" /> Contact Information</h2>
+                        <div className="flex flex-col gap-6">
+                           <div className="flex items-center gap-4">
+                              <MapPin className="text-blue-500" />
+                              <span className="font-bold text-slate-700">Address:</span>
+                              <span className="text-slate-600">{addressText ? String(addressText) : '—'}</span>
                            </div>
-                           <div className="p-8 text-center hover:bg-slate-50 transition-colors">
-                              <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                                 <Mail size={24} />
+                           {phoneValue ? (
+                              <div className="flex items-center gap-4">
+                                 <Phone className="text-blue-500" />
+                                 <span className="font-bold text-slate-700">Phone:</span>
+                                 <a href={`tel:${phoneValue}`} className="text-blue-600 font-bold hover:underline">{String(phoneValue)}</a>
                               </div>
-                              <h3 className="font-bold text-slate-900 mb-1">Email</h3>
-                              <p className="text-slate-500 mb-3 text-sm">For general inquiries</p>
-                              <a href={`mailto:${institution.contact.email}`} className="text-blue-600 font-bold hover:underline">{institution.contact.email}</a>
-                           </div>
-                           <div className="p-8 text-center hover:bg-slate-50 transition-colors">
-                              <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                                 <Globe size={24} />
+                           ) : null}
+                           {emailValue ? (
+                              <div className="flex items-center gap-4">
+                                 <Mail className="text-blue-500" />
+                                 <span className="font-bold text-slate-700">Email:</span>
+                                 <a href={`mailto:${emailValue}`} className="text-blue-600 font-bold hover:underline">{String(emailValue)}</a>
                               </div>
-                              <h3 className="font-bold text-slate-900 mb-1">Website</h3>
-                              <p className="text-slate-500 mb-3 text-sm">Visit official site</p>
-                              <a href={`https://${institution.contact.website}`} target="_blank" rel="noreferrer" className="text-blue-600 font-bold hover:underline">{institution.contact.website}</a>
+                           ) : null}
+                           <div className="flex items-center gap-4">
+                              <Globe className="text-blue-500" />
+                              <span className="font-bold text-slate-700">Website:</span>
+                              {websiteValue ? (
+                                 <a href={websiteValue} target="_blank" rel="noreferrer" className="text-blue-600 font-bold hover:underline">{websiteValue}</a>
+                              ) : (
+                                 <span className="text-slate-600">—</span>
+                              )}
                            </div>
                         </div>
                      </div>
                   )}
                </div>
 
-               {/* Sidebar Column */}
+               {/* Sidebar Column: now only website/email info, no admission info */}
                <div className="w-full lg:w-96 space-y-8 flex-shrink-0">
-
-                  {/* Admission Card */}
-                  <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50 reveal reveal-delay-200">
-                     <h3 className="font-bold text-xl text-slate-900 mb-6">Admission Info</h3>
-                     <div className="space-y-6">
-                        <div>
-                           <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Process</div>
-                           <p className="text-slate-700 font-medium">{institution.admissionProcess}</p>
-                        </div>
-                        <div>
-                           <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Fee Range</div>
-                           <p className="text-slate-700 font-medium">{institution.feeRange}</p>
-                        </div>
-                        <button
-                           onClick={() => setIsRequestModalOpen(true)}
-                           className="w-full py-4 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl hover:-translate-y-1"
-                        >
-                           Contact Admissions
-                        </button>
-                     </div>
+                  <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50 reveal reveal-delay-200 flex flex-col gap-4 items-center">
+                     <Globe className="text-blue-600 mb-2" size={32} />
+                     {websiteValue ? (
+                        <a href={websiteValue} target="_blank" rel="noreferrer" className="text-blue-600 font-bold hover:underline text-lg break-all">{websiteValue}</a>
+                     ) : (
+                        <span className="text-slate-500 font-semibold">No website provided</span>
+                     )}
+                     {emailValue ? (
+                        <>
+                           <Mail className="text-blue-600 mb-2" size={28} />
+                           <a href={`mailto:${emailValue}`} className="text-blue-600 font-bold hover:underline text-lg break-all">{String(emailValue)}</a>
+                        </>
+                     ) : null}
                   </div>
-
-                  {/* Location Card */}
-                  <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 reveal reveal-delay-300">
-                     <h3 className="font-bold text-lg text-slate-900 mb-4 flex items-center gap-2">
-                        <MapPin size={20} className="text-slate-400" /> Location
-                     </h3>
-                     <div className="h-48 bg-slate-200 rounded-xl mb-4 relative overflow-hidden group cursor-pointer">
-                        <div className="absolute inset-0 flex items-center justify-center text-slate-500 font-bold z-10 group-hover:scale-110 transition-transform">
-                           View on Map
-                        </div>
-                        <div className="absolute inset-0 bg-slate-300 opacity-50"></div>
-                     </div>
-                     <p className="text-slate-600 font-medium text-center">{institution.location}, {institution.district}</p>
-                  </div>
-
                </div>
             </div>
          </div>

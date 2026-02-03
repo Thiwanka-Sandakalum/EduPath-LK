@@ -6,6 +6,7 @@ export type ProgramCreate = {
     institution_id: string;
     name: string;
     program_code?: string;
+    image_url?: string;
     description?: string;
     level?: string;
     duration?: Record<string, any>;

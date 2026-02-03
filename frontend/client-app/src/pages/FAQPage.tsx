@@ -19,8 +19,8 @@ const FAQ = () => {
       answer: "Yes, we strive to keep our database up-to-date by regularly verifying information with official university websites, the UGC, and scholarship providers. However, we always recommend double-checking with the official institution before applying."
     },
     {
-      question: "How do I compare different institutions?",
-      answer: "Use our 'Compare Institutions' tool located in the Tools section. You can select up to three universities to view a side-by-side comparison of their rankings, fees, facilities, and more."
+      question: "How do I compare different courses?",
+      answer: "Open any course and click 'Compare' to add it (up to three). Then go to Tools  Course Comparison to see a side-by-side comparison of fees, duration, requirements, and more."
     },
     {
       question: "What is a Z-score and how is it calculated?",
@@ -58,7 +58,7 @@ const FAQ = () => {
        {/* HERO SECTION */}
        <div className="relative h-[300px] overflow-hidden mb-12">
          <img 
-            src="https://images.unsplash.com/photo-1556761175-5973dc0f32e7?q=80&w=2000&auto=format&fit=crop" 
+            src="https://th.bing.com/th/id/R.3a03bd9996d8faa23800db5ce1a23b72?rik=RGZxLFVipbcGCg&pid=ImgRaw&r=0" 
             className="w-full h-full object-cover" 
             alt="FAQ Hero" 
          />

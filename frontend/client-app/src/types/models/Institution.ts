@@ -16,6 +16,10 @@ export type Institution = {
      */
     institution_code?: string;
     /**
+     * Public image URL for the institution (hero/logo)
+     */
+    image_url?: string;
+    /**
      * Institution overview
      */
     description?: string;

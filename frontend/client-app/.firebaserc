@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "edupath-lk"
-  }
+    "default": "edupath-lk",
+    "prod": "edupath-lk"
+  },
+  "targets": {},
+  "etags": {}
 }

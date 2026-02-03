@@ -35,3 +35,6 @@ Thumbs.db
 *.tfstate.*
 .terraform/
 frontend/client-app/public/config.js
+frontend/client-app/.firebase/hosting.ZGlzdA.cache
+frontend/client-app/.firebase/hosting.ZGlzdA.cache
+frontend/client-app/scripts/config.js

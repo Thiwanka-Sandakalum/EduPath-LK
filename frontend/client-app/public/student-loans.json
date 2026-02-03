@@ -1,0 +1,75 @@
+{
+  "updatedAt": "2026-02-03",
+  "studentLoans": [
+    {
+      "id": "mohe-interest-free",
+      "name": "Interest-Free Student Loan Scheme",
+      "provider": "Ministry of Higher Education and Vocational Education (Sri Lanka)",
+      "interestRate": "0% (interest-free; government bears interest for 12 years)",
+      "maxAmount": "Depends on degree length & stream (e.g., up to Rs. 1,500,000 for 4-year Engineering; stipend loan up to Rs. 300,000 optional)",
+      "duration": "Total loan period 12 years; grace period 1 year; repayment over 7 or 8 years (84 or 96 instalments) after completing degree",
+      "eligibility": [
+        "Sat for G.C.E. (A/L) in 2022, 2023, or 2024 and eligible for university admission",
+        "3 simple (S) passes for all 3 subjects in the same sitting (max 3 sittings)",
+        "Common General Test: minimum 30 marks (max 3 sittings)",
+        "General English: at least simple (S) pass at A/L OR English Language: at least simple (S) pass at O/L",
+        "Age 25 or below"
+      ],
+      "features": [
+        "Implemented since 2017",
+        "Covers approved degree programmes at affiliated Degree Awarding Institutes (DAIs)",
+        "Optional stipend loan up to Rs. 300,000 for daily expenses",
+        "Repayment starts after degree completion + 1-year grace period",
+        "Maximum loan limits vary by stream and whether degree is 3-year or 4-year"
+      ],
+      "applyLink": "https://mohe.gov.lk/index.php?option=com_content&view=article&id=348%3Ainterest-free-student-loan-scheme&catid=48&Itemid=331&lang=en"
+    },
+    {
+      "id": "combank-edu",
+      "name": "Commercial Bank Educational Loans",
+      "provider": "Commercial Bank of Ceylon",
+      "interestRate": "Not specified in document",
+      "maxAmount": "Up to Rs. 10,000,000 (covers up to 75% of total course fee, including examination charges)",
+      "duration": "Up to 7 years",
+      "eligibility": [
+        "Applicant must be at least 18 years old",
+        "Employed: minimum monthly net salary Rs. 75,000",
+        "Self-employed professionals: must be qualified in their field"
+      ],
+      "features": [
+        "Covers up to 75% of total course fee (incl. exam charges)",
+        "Repayment options: equated monthly instalments or reducing balance instalment method",
+        "Documents required: application, recent salary slips, employer confirmation letter, bank statements"
+      ],
+      "applyLink": "https://www.combank.lk"
+    },
+    {
+      "id": "boc-edu",
+      "name": "Bank of Ceylon Educational Loan",
+      "provider": "Bank of Ceylon",
+      "interestRate": "Not specified in document",
+      "maxAmount": "Not specified in document",
+      "duration": "Not specified in document",
+      "eligibility": [
+        "Minimum 3 passes at G.C.E. (A/L) for degree courses (as stated in document)"
+      ],
+      "features": [
+        "Financial assistance for higher education (general description in document)"
+      ],
+      "applyLink": "https://www.boc.lk"
+    },
+    {
+      "id": "peoples-wisdom",
+      "name": "Wisdom Loan Scheme",
+      "provider": "People's Bank",
+      "interestRate": "Not specified in document",
+      "maxAmount": "Not specified in document",
+      "duration": "Not specified in document",
+      "eligibility": [],
+      "features": [
+        "Focus: supporting youth to achieve educational goals (as stated in document)"
+      ],
+      "applyLink": "https://www.peoplesbank.lk"
+    }
+  ]
+}

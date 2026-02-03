@@ -1,5 +1,6 @@
-
-import { Institution, Course, Scholarship } from '../types';
+import type { Institution } from '../types/institution';
+import type { Course } from '../types/course';
+import type { Scholarship } from '../types/scholarship';
 
 export interface BlogPost {
   id: number;
@@ -17,73 +18,354 @@ export interface BlogPost {
 }
 
 export const blogPosts: BlogPost[] = [
-  {
-    id: 1,
-    title: "How to Choose the Right Degree for You",
-    summary: "Confused between Engineering and IT? Here is a step-by-step guide to finding your passion.",
-    content: `Choosing a degree is one of the most significant decisions you'll make in your early life. It's not just about what you'll study for the next 3 or 4 years; it's about the foundation of your career.
+{
+  id: 1,
+  title: "Why Sri Lankan Students Struggle to Choose the Right University – and How Technology Can Fix It",
+  summary: "University information is scattered and confusing. Here’s how a centralized digital platform can help students make better decisions.",
+  content: `Choosing the right university is one of the most important decisions for Sri Lankan students, but it is also one of the most confusing. Information about universities, courses, entry requirements, scholarships, and loans is scattered across many websites, social media pages, and physical offices. Much of this information is outdated or unreliable, forcing students to rely on friends or unofficial online posts.
 
-In Sri Lanka, the pressure often mounts around A/L results. Many students feel pushed towards traditional paths like Medicine or Engineering simply because their Z-score allows it. But is that where your passion lies?
+This situation is especially difficult for students in rural areas, where access to career guidance and counseling services is limited. As a result, many students miss suitable courses, scholarships, or admission deadlines, increasing stress and uncertainty during a critical stage of their education journey.
 
-### 1. Identify Your Interests
-Start by listing subjects you genuinely enjoyed in school. Did you love the logic of Mathematics? Or the creativity in Arts? Understanding your core interests is the first step.
+### 1. The Problem of Scattered Information
+Students must visit multiple websites and sources to collect details about universities and courses. There is no single trusted place to find verified and up-to-date educational information in Sri Lanka.
 
-### 2. Research the Industry
-Don't just look at the degree; look at the job market. The IT sector in Sri Lanka is booming, with high demand for software engineers and data scientists. Conversely, fields like Civil Engineering offer stability and physical impact on the country's infrastructure.
+### 2. Lack of Career Guidance
+Many students do not have access to proper guidance counselors. They depend on friends, tuition teachers, or social media posts, which may not always provide accurate advice.
 
-### 3. Talk to Professionals
-Reach out to seniors or mentors through platforms like LinkedIn. Ask them about their day-to-day work. Often, the reality of a job is quite different from the classroom theory.`,
-    category: "Guidance",
-    author: "Dr. K. Perera",
-    authorRole: "Education Consultant",
-    authorAvatar: "https://ui-avatars.com/api/?name=K+Perera&background=0D8ABC&color=fff",
-    readTime: "5 min read",
-    image: "https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=800&auto=format&fit=crop",
-    date: "Oct 24, 2025",
-    tags: ["Higher Education", "Career Advice", "Sri Lanka"]
-  },
+### 3. How Technology Can Solve This
+A centralized digital platform can bring together verified details about government and private universities, available courses, fee structures, scholarships, and student loan schemes in one place.
+
+### 4. Smart Tools for Smart Decisions
+Features like Z-score eligibility calculators, admission deadline tracking, and AI-based career guidance can help students quickly understand their options and make confident decisions.
+
+By using technology in this way, Sri Lankan students can save time, reduce confusion, and gain equal access to higher education opportunities regardless of their location.`,
+  category: "Guidance",
+  author: "Anjala Sewwandi",
+  authorRole: "ICT Undergraduate | EduPath LK Team",
+  authorAvatar: "https://ui-avatars.com/api/?name=Anjala+Sewwandi&background=0D8ABC&color=fff",
+  readTime: "4 min read",
+  image: "https://img.freepik.com/premium-photo/clever-arabian-indian-male-student-freelancer-stylish-casual-clothes-library_255667-47878.jpg",
+  date: "Jan 02, 2026",
+  tags: ["University Selection", "Career Guidance", "Sri Lanka", "Technology in Education"]
+},
+
   {
-    id: 2,
-    title: "Top 5 Scholarships for 2025",
-    summary: "Don't miss these fully funded opportunities for undergraduate studies in Sri Lanka and abroad.",
-    content: "Scholarships can turn dreams into reality. For many Sri Lankan students, the cost of higher education—especially international degrees—can be prohibitive. Here are the top 5 opportunities to watch in 2025...",
-    category: "Scholarships",
-    author: "Sarah J.",
-    authorRole: "Scholarship Researcher",
-    authorAvatar: "https://ui-avatars.com/api/?name=Sarah+J&background=random",
-    readTime: "4 min read",
-    image: "https://images.unsplash.com/photo-1627556592933-ffe99c1cd9eb?q=80&w=800&auto=format&fit=crop",
-    date: "Oct 22, 2025",
-    tags: ["Funding", "Abroad Studies", "UGC"]
-  },
+  id: 2,
+  title: "Understanding the Sri Lankan A/L Z-Score: A Simple Guide for Students",
+  summary: "Not sure how the Z-score works? Here’s a clear explanation of how it’s calculated and why it matters for university selection.",
+  content: `The Sri Lankan A/L Z-score is a standard method used to select students for government universities. Instead of looking only at raw marks, the Z-score shows how well a student has performed compared to other students in the same examination stream and year. This system ensures fairness because different subjects and streams can have different difficulty levels.
+
+The University Grants Commission (UGC) uses the Z-score to rank students and decide eligibility for various university courses.
+
+### 1. What Is a Z-Score?
+A Z-score represents how a student’s performance compares to the national average of students in the same stream. It is not just your total marks, but your position among all candidates.
+
+### 2. How Is It Calculated?
+The Z-score is calculated using:
+- Your subject marks
+- The average (mean) marks of all students
+- The standard deviation of those marks
+
+In simple terms, it measures how far your results are above or below the national average.
+
+### 3. Why Is It Important?
+A higher Z-score means better performance compared to others. Students with higher Z-scores have more opportunities to enter competitive university degree programs.
+
+### 4. How Students Can Use This Knowledge
+Understanding the Z-score helps students:
+- Choose suitable degree programs
+- Set realistic targets
+- Plan their education path with confidence
+
+Knowing how the Z-score works removes confusion and helps students make smarter university choices.`,
+  category: "Guidance",
+  author: "Sonduruwani Wickramarathna",
+  authorRole: "ICT Undergraduate | EduPath LK Team",
+  authorAvatar: "https://ui-avatars.com/api/?name=Sonduruwani+Wickramarathna&background=0D8ABC&color=fff",
+  readTime: "3 min read",
+  image: "https://navi.com/blog/wp-content/uploads/2022/12/Z-Score.jpg",
+  date: "Jan 10, 2026",
+  tags: ["Z-Score", "A/L Students", "University Admission", "Sri Lanka"]
+}
+,
   {
-    id: 3,
-    title: "The Future of IT Jobs in Sri Lanka",
-    summary: "An analysis of the growing tech industry and what skills are in highest demand right now.",
-    content: "The tech landscape is evolving rapidly. From AI to Cloud Computing, Sri Lankan graduates have a unique opportunity to work with global giants from the comfort of their home...",
-    category: "Career",
-    author: "M. Dilshan",
-    authorRole: "Tech Recruiter",
-    authorAvatar: "https://ui-avatars.com/api/?name=M+Dilshan&background=random",
-    readTime: "6 min read",
-    image: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=800&auto=format&fit=crop",
-    date: "Oct 18, 2025",
-    tags: ["Technology", "Jobs", "Economy"]
-  },
+  id: 3,
+  title: "How to Choose the Right Degree After A/Ls in Sri Lanka",
+  summary: "Finished A/Ls and feeling confused? Follow this simple step-by-step method to pick a degree that matches your interests, results, and career goals.",
+  content: `Finishing your A/Ls is exciting… but also confusing. Suddenly, the big question hits: “What should I study next?” For many students in Sri Lanka, especially those in rural areas, finding reliable information about universities, courses, and career options can feel overwhelming.
+
+Choosing the right degree isn’t just about marks or what your friends are picking. It’s about finding something that fits your interests, skills, and future goals.
+
+### 1. Start With Yourself
+Before you look at courses or universities, understand yourself.
+
+Ask:
+- Which subjects did I enjoy most?
+- What am I naturally good at?
+- Do I prefer people, numbers, or technology?
+
+A degree that matches your interests makes studying easier and more enjoyable.
+
+### 2. Check Your A/L Stream and Results
+Your stream and results decide what you are eligible for.
+
+- Science → Medicine, Engineering, IT, Science
+- Commerce → Management, Accounting, Finance
+- Arts → Humanities, Law, Education, Social Sciences
+
+Choose something that fits both your strengths and eligibility.
+
+### 3. Research All Your Options
+Don’t focus only on popular degrees. Sri Lanka offers many fields:
+- Tourism and Hospitality
+- Agriculture and Environment
+- Logistics and Supply Chain
+- Biotechnology
+- Education and Teaching
+
+Compare universities, courses, and scholarships using trusted platforms like EduPath.lk.
+
+### 4. Think About Career Opportunities
+Ask:
+- Are there jobs in this field in Sri Lanka?
+- Is this career growing?
+- Can I work abroad?
+
+Fields like IT, healthcare, engineering, education, and tourism have strong demand.
+
+### 5. Government vs Private Universities
+Both options are valid.
+
+- Government: Low cost, high competition
+- Private: Higher cost, easier entry, international pathways
+
+Explore all options before deciding.
+
+### 6. Consider Practical Factors
+Think about:
+- Course cost
+- Location
+- Duration
+- Scholarships and loans
+
+These factors are very important, especially for rural students.
+
+### 7. Seek Advice — But Decide for Yourself
+Listen to teachers, parents, and seniors. But remember, this is your future.
+
+### 8. Avoid Common Mistakes
+Avoid:
+- Following friends blindly
+- Choosing only for money or status
+- Ignoring career demand
+- Missing alternative pathways
+
+Take your time. Research well.
+
+### Final Thoughts
+Choosing a degree after A/Ls doesn’t have to be stressful. Focus on your interests, strengths, and future goals. With the right information and planning, you can make a smart decision that builds a strong future.`,
+  category: "Guidance",
+  author: "Anjala Sewwandi",
+  authorRole: "ICT Undergraduate | EduPath LK Team",
+  authorAvatar: "https://ui-avatars.com/api/?name=Anjala+Sewwandi&background=0D8ABC&color=fff",
+  readTime: "6 min read",
+  image: "https://th.bing.com/th/id/R.2092ab1b1060e5ceca61d8f5009ad004?rik=XcySBw9qDaY49A&pid=ImgRaw&r=0",
+  date: "Jan 20, 2026",
+  tags: ["Degree Selection", "A/L Students", "Career Planning", "Sri Lanka"]
+}
+,
   {
-    id: 4,
-    title: "A/L Z-Score Explained",
-    summary: "Everything you need to know about how the UGC calculates your university admission score.",
-    content: "Z-score calculations can seem like black magic to the uninitiated. This guide breaks down the standard deviation and mean score logic used by the University Grants Commission...",
-    category: "Guidance",
-    author: "Prof. S. Silva",
-    authorRole: "University Professor",
-    authorAvatar: "https://ui-avatars.com/api/?name=S+Silva&background=random",
-    readTime: "8 min read",
-    image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=800&auto=format&fit=crop",
-    date: "Oct 15, 2025",
-    tags: ["Exams", "Admissions", "Statistics"]
-  }
+  id: 4,
+  title: "How Rural Students Can Access Higher Education Opportunities in Sri Lanka",
+  summary: "Living far from cities shouldn’t limit your dreams. Learn how rural students can find universities, scholarships, and guidance using the right tools.",
+  content: `For many students in rural Sri Lanka, finishing A/Ls is just the beginning of a new challenge. Even with good results, finding reliable information about universities, courses, scholarships, and career paths can be difficult. Limited guidance, fewer resources, and low awareness often make the process stressful.
+
+Today, this gap can be reduced with the help of technology and centralized platforms.
+
+### 1. Understand Your Goals and Interests
+Start with yourself.
+
+Ask:
+- Which subjects do I enjoy?
+- What am I naturally good at?
+- What career do I want?
+
+Knowing this helps you focus on suitable degree programs.
+
+### 2. Use Centralized Platforms
+Instead of searching many places, use trusted platforms like EduPath.lk that provide:
+- University and institute details
+- Degree programs and entry requirements
+- Scholarships, bursaries, and education loans
+- Course comparisons and career guidance
+
+This saves time, travel, and confusion.
+
+### 3. Explore Scholarships and Financial Support
+Financial problems should not stop your education. Look for:
+- Government scholarships (Mahapola)
+- Bursaries for underprivileged students
+- Education loans
+- Private and international scholarships
+
+### 4. Plan for Distance and Location
+If you live far from cities:
+- Check for hostel facilities
+- Consider online or blended learning options
+- Compare travel and living costs
+
+### 5. Seek Guidance and Mentorship
+You can still get guidance by:
+- Talking to teachers
+- Connecting with seniors online
+- Using reliable online resources
+
+### 6. Stay Motivated and Persistent
+Rural location is a challenge, but not a limitation. With proper planning and the right information, you can achieve the same opportunities as city students.
+
+### Final Thoughts
+Rural students in Sri Lanka face extra difficulties, but these can be overcome. With the right tools, research, and determination, higher education opportunities are within reach for everyone.`,
+  category: "Guidance",
+  author: "Lakshani",
+  authorRole: "ICT Undergraduate | EduPath LK Team",
+  authorAvatar: "https://ui-avatars.com/api/?name=Lakshani&background=0D8ABC&color=fff",
+  readTime: "5 min read",
+  image: "https://th.bing.com/th/id/R.05ddc62ca200d7a77412a4ca8ddb6507?rik=TAzX1UW9fdVfCQ&pid=ImgRaw&r=0",
+  date: "Jan 25, 2026",
+  tags: ["Rural Students", "Higher Education", "Scholarships", "Sri Lanka"]
+},
+{
+  id: 5,
+  title: "Private vs Government Universities in Sri Lanka: Which One Is Right for You?",
+  summary: "Not sure whether to choose a government or private university? Here’s a clear comparison to help you decide based on cost, entry, and career goals.",
+  content: `After finishing your A/Ls, one of the biggest decisions you’ll face is choosing where to study next. In Sri Lanka, students often wonder: “Should I go to a government university or a private university?” Both options have their advantages and challenges. The right choice depends on your goals, budget, results, and future plans.
+
+Let’s break it down so you can make an informed decision.
+
+### 1. Government Universities: Low Cost, High Competition
+Government universities in Sri Lanka are funded by the state. Entry is mainly based on A/L Z-scores and district ranks.
+
+Advantages
+- Low tuition fees: Most courses are free or very affordable
+- Recognized degrees: Widely respected in Sri Lanka and abroad
+- Strong academic programs: Many offer research opportunities and established faculties
+
+Challenges
+- Limited seats: Only a small number of students are accepted each year
+- High competition: Admission is extremely competitive
+- Location constraints: Some students need to relocate to major cities
+
+### 2. Private Universities: Flexible Entry, Higher Cost
+Private universities are funded through tuition fees. Some are local, and others are affiliated with international universities.
+
+Advantages
+- Easier entry: Less competitive than government universities
+- International programs: Many offer degrees recognized abroad
+- Modern facilities: Up-to-date labs, libraries, and student services
+
+Challenges
+- Higher tuition fees: Can be expensive, especially for international degrees
+- Varied recognition: Not all private degrees are valued equally
+- Limited campus culture: Some institutions have fewer clubs and activities
+
+### 3. How to Choose What’s Best for You
+Consider these points:
+- Budget: Can you afford private fees? Are scholarships or loans available?
+- Results: Do your A/L results meet government university cutoffs?
+- Career goals: Do you prefer a local path or an international program?
+- Location: Are you ready to relocate, or do you need a nearby option?
+
+### 4. How EduPath.lk Helps
+Choosing between private and government universities can be confusing. EduPath.lk makes it easier by:
+- Listing government and private universities in one place
+- Comparing courses, fees, and entry requirements
+- Showing scholarship and financial support options
+- Helping students plan based on career goals
+
+### Final Thoughts
+There’s no one-size-fits-all answer. Government universities are ideal if you want a low-cost, respected degree and can compete academically. Private universities are a good option if you need flexibility, international programs, or faster entry.
+
+The right university is the one that fits your goals, your budget, and your future plans.`,
+  category: "Guidance",
+  author: "Sithumini Vibhasha",
+  authorRole: "ICT Undergraduate | EduPath LK Team",
+  authorAvatar: "https://ui-avatars.com/api/?name=Sithumini+Vibhasha&background=0D8ABC&color=fff",
+  readTime: "6 min read",
+  image: "https://cdn.unischolarz.com/blog/wp-content/uploads/2024/01/20105850/PRIVATE-VS-PUBLIC.webp",
+  date: "Feb 01, 2026",
+  tags: ["Private Universities", "Government Universities", "Higher Education", "Sri Lanka"]
+},
+{
+  id: 6,
+  title: "Why Students Need Smart Digital Platforms to Plan Their Education",
+  summary: "From scattered info to smart guidance — see how digital platforms help students choose courses, track deadlines, and make confident decisions.",
+  content: `For many students, deciding what to study and where to study is more confusing than the exams themselves. Universities, private institutes, scholarships, and education loans all come with different requirements, deadlines, and eligibility criteria. The information exists — but not always in a way that supports confident decisions.
+
+Smart digital platforms are changing this experience.
+
+### 1. The Traditional Approach Is Broken
+Many students still:
+- Search random websites for details
+- Rely on social media posts
+- Ask friends or seniors for advice
+- Manually track deadlines
+
+This often leads to outdated info, missed opportunities, and late applications.
+
+### 2. From Static Websites to Intelligent Systems
+Modern platforms are not just course lists. They provide:
+- Searchable databases of institutions and programs
+- Filters based on results and interests
+- Real-time updates on admissions and scholarships
+
+Students are guided step by step instead of reading endless pages.
+
+### 3. Eligibility-Based Guidance Reduces Uncertainty
+A common problem is not knowing what you qualify for. Smart systems:
+- Accept academic performance details
+- Apply eligibility rules automatically
+- Show only relevant options
+
+This saves time and reduces disappointment.
+
+### 4. AI as a First Line of Career Guidance
+Not every student has access to counselors. AI chat tools can:
+- Answer questions instantly
+- Explain courses and career paths simply
+- Suggest options based on interests
+
+AI becomes a helpful first step for guidance.
+
+### 5. Automation Keeps Information Accurate
+Education data changes often. Modern platforms use:
+- Automated data collection
+- Admin verification dashboards
+- Cloud databases
+
+This ensures students always see up-to-date information.
+
+### 6. Accessibility for Everyone
+A good platform must support:
+- Rural students
+- First-time applicants
+- Parents helping their children
+
+Mobile-friendly design makes guidance available anytime, anywhere.
+
+### Final Thoughts
+Education planning should reduce stress, not create it. With structured data, intelligent tools, AI support, and automation, digital platforms make education guidance smarter, fairer, and more accessible for all students.`,
+  category: "Guidance",
+  author: "Sonduruwani Wickramarathna",
+  authorRole: "ICT Undergraduate | EduPath LK Team",
+  authorAvatar: "https://ui-avatars.com/api/?name=Sonduruwani+Wickramarathna&background=0D8ABC&color=fff",
+  readTime: "5 min read",
+  image: "https://www.orhp.com/hubfs/ChatGPT_1200x628.jpg",
+  date: "Feb 02, 2026",
+  tags: ["Digital Education", "Career Guidance", "Students", "Sri Lanka"]
+}
+
+
+
 ];
 
 export const institutions: Institution[] = [

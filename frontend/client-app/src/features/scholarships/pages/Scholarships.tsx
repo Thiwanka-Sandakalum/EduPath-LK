@@ -1,16 +1,48 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { scholarships } from '../../../data/mockData';
+import { scholarships } from '../../../data/scholarshipsFromJson';
 import {
    Trophy, Calendar, Globe, Search, Filter, MapPin, GraduationCap,
    CheckCircle, ArrowRight, AlertTriangle, DollarSign, Info, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 const heroImages = [
-   "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=2000",
-   "https://images.unsplash.com/photo-1627556592933-ffe99c1cd9eb?q=80&w=2000",
-   "https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=2000"
+   "https://static.vecteezy.com/system/resources/previews/031/311/028/non_2x/a-glass-bottle-with-stack-of-coins-money-and-a-graduation-hat-on-top-saving-money-and-educational-success-concept-by-ai-generated-free-photo.jpg",
+   "https://static.vecteezy.com/system/resources/previews/037/245/908/non_2x/ai-generated-graduation-advertisment-background-with-copy-space-free-photo.jpg",
+   "https://assets.isu.pub/document-structure/230327182313-9086558d064b85922de67c062a19bad3/v1/868b4162dce7d830200dd158612ee2ee.jpeg"
 ];
+
+const getClientSessionId = () => {
+   try {
+      const key = 'edupath_client_session_v1';
+      const existing = localStorage.getItem(key);
+      if (existing) return existing;
+      const created = `sess_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+      localStorage.setItem(key, created);
+      return created;
+   } catch {
+      return `sess_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+   }
+};
+
+const getApiBaseUrl = () => {
+   const cfg = (window as any)?.config;
+   return (cfg?.BASE_API_URL as string | undefined) || 'http://localhost:2000';
+};
+
+const trackScholarshipView = async (scholarshipId: string) => {
+   try {
+      const base = getApiBaseUrl();
+      const session_id = getClientSessionId();
+      await fetch(`${base}/analytics/scholarships/${encodeURIComponent(scholarshipId)}/view`, {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ session_id }),
+      });
+   } catch {
+      // ignore tracking errors
+   }
+};
 
 const ScholarshipsPage = () => {
    const [searchParams] = useSearchParams();
@@ -33,7 +65,9 @@ const ScholarshipsPage = () => {
       if (q !== null) setSearchQuery(q);
    }, [searchParams]);
 
-   const fields = Array.from(new Set(scholarships.map(s => s.field))).sort();
+   const fields = Array.from(new Set(scholarships.map(s => s.field)))
+      .filter(f => f !== 'All Fields')
+      .sort();
    const filteredScholarships = useMemo(() => {
       return scholarships.filter(s => {
          const matchesSearch = s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -55,7 +89,14 @@ const ScholarshipsPage = () => {
    };
 
    const toggleExpand = (id: string) => {
-      setExpandedId(prev => prev === id ? null : id);
+      setExpandedId(prev => {
+         const next = prev === id ? null : id;
+         // Track only when opening the details.
+         if (next === id) {
+            void trackScholarshipView(id);
+         }
+         return next;
+      });
    };
 
    return (
@@ -134,12 +175,29 @@ const ScholarshipsPage = () => {
                         <div className="p-8 md:p-12">
                            <div className="flex flex-col lg:flex-row gap-10">
 
-                              <div className="lg:w-1/4 flex flex-col items-center lg:items-start text-center lg:text-left">
-                                 <div className={`w-24 h-24 rounded-3xl flex items-center justify-center text-white shadow-2xl mb-6 group-hover:scale-105 transition-transform ${s.type === 'International' ? 'bg-indigo-600' : 'bg-blue-600'}`}>
-                                    {s.type === 'International' ? <Globe size={40} /> : <Trophy size={40} />}
-                                 </div>
-                                 <div className={`px-5 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl shadow-sm ${getStatusBadge(s.status)}`}>
-                                    {s.status}
+                              <div className="lg:w-1/4 flex flex-col items-center text-center">
+                                 <div className="w-full max-w-[240px] mx-auto rounded-[2rem] border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-6 relative overflow-hidden shadow-sm">
+                                    <img
+                                       src={s.type === 'International' ? heroImages[1] : heroImages[0]}
+                                       alt=""
+                                       className="absolute inset-0 w-full h-full object-cover opacity-10"
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-b from-white/85 via-white/70 to-white/90 dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/75" />
+
+                                    <div className="relative flex flex-col items-center gap-4">
+                                       <div className={`w-20 h-20 rounded-3xl flex items-center justify-center text-white shadow-xl ring-1 ring-white/20 group-hover:scale-105 transition-transform ${s.type === 'International' ? 'bg-indigo-600' : 'bg-blue-600'}`}>
+                                          {s.type === 'International' ? <Globe size={36} /> : <Trophy size={36} />}
+                                       </div>
+
+                                       <div className="flex flex-col items-center gap-2">
+                                          <div className={`px-5 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl shadow-sm ${getStatusBadge(s.status)}`}>
+                                             {s.status}
+                                          </div>
+                                          <div className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">
+                                             {s.type === 'International' ? 'International' : 'Local'}
+                                          </div>
+                                       </div>
+                                    </div>
                                  </div>
                               </div>
 

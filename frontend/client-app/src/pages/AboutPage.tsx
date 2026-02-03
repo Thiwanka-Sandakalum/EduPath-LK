@@ -48,7 +48,7 @@ const About = () => {
       {/* HERO SECTION */}
       <div className="relative h-[300px] overflow-hidden mb-12">
          <img 
-            src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=2000&auto=format&fit=crop" 
+            src="https://th.bing.com/th/id/OIP.aEIP33Nzfo81hEOZ6S-n5QHaCO?o=7rm=3&rs=1&pid=ImgDetMain&o=7&rm=3" 
             className="w-full h-full object-cover" 
             alt="About Hero" 
          />

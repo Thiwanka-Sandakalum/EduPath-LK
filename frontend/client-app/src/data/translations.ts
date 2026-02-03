@@ -1,3 +1,4 @@
+import Loans from "@/features/loans/Loans";
 
 export type Language = 'en' | 'si' | 'ta';
 
@@ -77,6 +78,7 @@ export const translations = {
       institutions: 'ආයතන',
       courses: 'පාඨමාලා',
       scholarships: 'ශිෂ්‍යත්ව',
+      loans: 'ණය',
       tools: 'මෙවලම්',
       blog: 'බ්ලොග්',
       chat: 'AI සහායක',
@@ -94,7 +96,8 @@ export const translations = {
     stats: {
       institutions: 'අධ්‍යාපන ආයතන',
       courses: 'පාඨමාලා',
-      scholarships: 'ශිෂ්‍යත්ව'
+      scholarships: 'ශිෂ්‍යත්ව',
+      loans: 'ණය'
     },
     categories: {
       title: 'ජනප්‍රිය වර්ගීකරණයන්',
@@ -146,6 +149,7 @@ export const translations = {
       institutions: 'நிறுவனங்கள்',
       courses: 'பாடநெறிகள்',
       scholarships: 'புலமைப்பரிசில்கள்',
+      loans: 'கடன்கள்',
       tools: 'கருவிகள்',
       blog: 'வலைப்பதிவு',
       chat: 'AI உதவியாளர்',
@@ -163,7 +167,8 @@ export const translations = {
     stats: {
       institutions: 'நிறுவனங்கள்',
       courses: 'பாடநெறிகள்',
-      scholarships: 'புலமைப்பரிசில்கள்'
+      scholarships: 'புலமைப்பரிசில்கள்',
+      loans: 'கடன்கள்'
     },
     categories: {
       title: 'பிரபலமான பிரிவுகள்',

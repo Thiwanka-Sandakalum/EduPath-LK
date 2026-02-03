@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
    Palette,
@@ -12,6 +12,7 @@ import {
    ChevronRight
 } from 'lucide-react';
 import { useAuth0 } from '@auth0/auth0-react';
+import { useAppStore } from '../../../context/AppContext';
 
 const Settings = () => {
    const navigate = useNavigate();
@@ -20,7 +21,7 @@ const Settings = () => {
 
    const handleLogout = () => {
       if (window.confirm('Are you sure you want to log out?')) {
-         logout({ returnTo: window.location.origin });
+         logout({ logoutParams: { returnTo: window.location.origin } });
       }
    };
 

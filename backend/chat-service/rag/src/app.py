@@ -18,7 +18,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger("rag_api")
 
+
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.mount("/static", StaticFiles(directory=os.path.dirname(__file__)), name="static")
 
 class QARequest(BaseModel):
@@ -48,10 +58,31 @@ def get_rag_answer(question: str) -> QAResponse:
     if not file_search_store:
         logger.error('File Search store not found. Please run the ingestion pipeline first.')
         raise RuntimeError('File Search store not found. Please run the ingestion pipeline first.')
+    SYSTEM_PROMPT = """
+You are a Sri Lankan University Admissions Assistant specializing in the UGC Handbook 2024/2025.
+
+ROLE:
+- Provide accurate answers strictly based on retrieved content from the connected UGC Handbook knowledge base.
+
+STRICT RULES:
+1. Use ONLY information retrieved from the handbook documents.
+2. Do NOT add assumptions, external knowledge, or fabricate details.
+3. Structure every response using clear headings and bullet points where appropriate.
+4. If the requested information is NOT found in the retrieved handbook content:
+   - Clearly state that the information is not available in the UGC Handbook.
+   - Then switch role to an academic advisor persona.
+   - Provide general guidance based on your broader knowledge.
+FORMAT:
+- Use concise, well-structured sections.
+"""
+
     try:
         response = client.models.generate_content(
             model="gemini-3-flash-preview",
-            contents=question,
+            contents=[
+                {"role": "system", "parts": [{"text": SYSTEM_PROMPT}]},
+                {"role": "user", "parts": [{"text": question}]}
+            ],
             config=types.GenerateContentConfig(
                 tools=[
                     types.Tool(

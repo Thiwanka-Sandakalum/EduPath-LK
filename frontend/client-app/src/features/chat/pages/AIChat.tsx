@@ -1,28 +1,115 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Trash2, Plus, MessageSquare, Sparkles, RefreshCw, PanelLeftClose, PanelLeftOpen, Terminal, ExternalLink } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { Send, Bot, User, Plus, Sparkles, RefreshCw, PanelLeftClose, PanelLeftOpen, Terminal, ExternalLink } from 'lucide-react';
 import { useAppStore } from '../../../context/AppContext';
-import { ChatSession, ChatMessage } from '../../../types';
-import { GoogleGenAI } from "@google/genai";
+import type { ChatSession, ChatMessage } from '../../../types/chat';
 
-// const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+import ReactMarkdown from 'react-markdown';
+import { DefaultService } from '../../../../services/chat';
 
-const SYSTEM_INSTRUCTION = `You are the EduPath LK Assistant, an expert educational consultant for Sri Lanka.
-Use Google Search grounding to provide the LATEST scholarship deadlines, university rankings, and UGC updates.
-Be concise and professional. If you use external information, the system will automatically handle the URLs.`;
+
+type CourseChatContext = {
+  courseId: string;
+  title: string;
+  description?: string;
+  level?: string;
+  field?: string;
+  institutionId?: string;
+  institutionName?: string;
+  classification?: 'Government' | 'Private' | 'Unknown';
+  governmentOfferings?: Array<{
+    universityId: string;
+    universityName: string;
+    proposedIntake?: number;
+    academicYear?: string;
+  }>;
+};
+
+const CHAT_CONTEXT_STORAGE_KEY = 'eduPath_chat_course_context_by_session';
+
+const loadContextMap = (): Record<string, CourseChatContext> => {
+  try {
+    const raw = localStorage.getItem(CHAT_CONTEXT_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const saveContextForSession = (sessionId: string, ctx: CourseChatContext) => {
+  if (!sessionId) return;
+  const map = loadContextMap();
+  map[sessionId] = ctx;
+  localStorage.setItem(CHAT_CONTEXT_STORAGE_KEY, JSON.stringify(map));
+};
+
+const getContextForSession = (sessionId: string | null): CourseChatContext | null => {
+  if (!sessionId) return null;
+  const map = loadContextMap();
+  const ctx = map[sessionId];
+  return ctx && typeof ctx === 'object' ? ctx : null;
+};
+
 
 const AIChat = () => {
-  const { user, chatSessions, saveChatSession, deleteChatSession } = useAppStore();
+  const { chatSessions, saveChatSession } = useAppStore();
+  const location = useLocation();
   const [input, setInput] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [currentSources, setCurrentSources] = useState<{ title: string, uri: string }[]>([]);
 
+  const [activeCourseContext, setActiveCourseContext] = useState<CourseChatContext | null>(null);
+
+
   const [activeSessionId, setActiveSessionId] = useState<string | null>(() =>
     chatSessions.length > 0 ? chatSessions[0].id : null
   );
 
   const activeSession = chatSessions.find(s => s.id === activeSessionId);
+
+  // If navigated from a Course Detail page, start a new chat with that course context.
+  useEffect(() => {
+    const state: any = (location as any)?.state;
+    const ctx: CourseChatContext | undefined = state?.courseContext;
+    const startNew: boolean = Boolean(state?.startNew);
+
+    if (!ctx || !ctx.courseId) return;
+
+    const newSessionId = Date.now().toString();
+    const newSession: ChatSession = {
+      id: newSessionId,
+      title: `Course: ${ctx.title || ctx.courseId}`,
+      date: 'Today',
+      messages: [
+        {
+          id: (Date.now() + 1).toString(),
+          role: 'bot',
+          text: `I’m ready. Ask me anything about “${ctx.title || ctx.courseId}”.`,
+          timestamp: new Date(),
+        },
+      ],
+    };
+
+    if (startNew) {
+      saveChatSession(newSession);
+      setActiveSessionId(newSessionId);
+      saveContextForSession(newSessionId, ctx);
+      setActiveCourseContext(ctx);
+    }
+
+    // Clear navigation state so refresh doesn't recreate sessions.
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    (window as any).history?.replaceState?.({}, document.title);
+  }, [location, saveChatSession]);
+
+  // Keep active course context in sync with active session
+  useEffect(() => {
+    const ctx = getContextForSession(activeSessionId);
+    setActiveCourseContext(ctx);
+  }, [activeSessionId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -33,12 +120,17 @@ const AIChat = () => {
     }
   }, [activeSession?.messages, isTyping]);
 
-  const handleSend = async (e?: React.FormEvent) => {
+  const handleSend = async (
+    e?: React.FormEvent,
+    overrideText?: string,
+    sessionOverride?: { session: ChatSession; sessionId: string }
+  ) => {
     if (e) e.preventDefault();
-    if (!input.trim() || isTyping) return;
+    const promptText = (overrideText ?? input).trim();
+    if (!promptText || isTyping) return;
 
-    let currentSession = activeSession;
-    let sessionId = activeSessionId;
+    let currentSession = sessionOverride?.session ?? activeSession;
+    let sessionId = sessionOverride?.sessionId ?? activeSessionId;
 
     if (!currentSession) {
       sessionId = Date.now().toString();
@@ -54,7 +146,7 @@ const AIChat = () => {
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
-      text: input,
+      text: promptText,
       timestamp: new Date()
     };
 
@@ -66,51 +158,61 @@ const AIChat = () => {
     setCurrentSources([]);
 
     try {
-      // const result = await ai.models.generateContent({
-      //   model: 'gemini-3-flash-preview',
-      //   contents: updatedMessages.map(m => ({
-      //     role: m.role === 'bot' ? 'model' : 'user',
-      //     parts: [{ text: m.text }]
-      //   })),
-      //   config: {
-      //     systemInstruction: SYSTEM_INSTRUCTION,
-      //     tools: [{ googleSearch: {} }]
-      //   }
-      // });
-
-      // const botText = result.text || "I'm sorry, I couldn't process that.";
-      // const grounding = result.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-      // const sources = grounding
-      //   .filter((chunk: any) => chunk.web)
-      //   .map((chunk: any) => ({
-      //     title: chunk.web.title,
-      //     uri: chunk.web.uri
-      //   }));
-
-      // const botMsgId = (Date.now() + 1).toString();
-      // const botMsg: ChatMessage = {
-      //   id: botMsgId,
-      //   role: 'bot',
-      //   text: botText,
-      //   timestamp: new Date()
-      // };
-
-      // saveChatSession({
-      //   ...currentSession,
-      //   messages: [...updatedMessages, botMsg]
-      // });
-      // setCurrentSources(sources);
-
-    } catch (error) {
-      console.error("Gemini Error:", error);
+      const botMsgId = (Date.now() + 2).toString();
       saveChatSession({
         ...currentSession,
-        messages: [...updatedMessages, { id: 'err', role: 'bot', text: "Connectivity issue. Please check your network and try again.", timestamp: new Date() }]
+        messages: [...updatedMessages, { id: botMsgId, role: 'bot', text: '', timestamp: new Date() }]
+      });
+
+      // Call the chat API with only the question
+      const response = await DefaultService.qaEndpointQaPost({ question: input });
+      const botText = response?.answer || 'No response from AI.';
+      saveChatSession({
+        ...currentSession,
+        messages: [...updatedMessages, { id: botMsgId, role: 'bot', text: botText, timestamp: new Date() }]
+      });
+
+      // Optionally handle source if provided
+      if (response?.source) {
+        setCurrentSources([{ title: response.source, uri: response.source }]);
+      }
+
+    } catch (error) {
+      console.error("Chat Service Error:", error);
+      saveChatSession({
+        ...currentSession,
+        messages: [...updatedMessages, { id: 'err' + Date.now(), role: 'bot', text: "Connectivity issue. Please check your network and try again.", timestamp: new Date() }]
       });
     } finally {
       setIsTyping(false);
     }
   };
+
+  // If navigated from Tools (e.g., Student Handbook Guide), seed a first question.
+  useEffect(() => {
+    const state: any = (location as any)?.state;
+    const seedPrompt: string | undefined = state?.seedPrompt;
+    if (!seedPrompt || typeof seedPrompt !== 'string' || !seedPrompt.trim()) return;
+
+    const newSessionId = Date.now().toString();
+    const newSession: ChatSession = {
+      id: newSessionId,
+      title: 'Student Handbook Guide',
+      date: 'Today',
+      messages: [],
+    };
+
+    // Start fresh and send the seeded prompt immediately.
+    setActiveSessionId(newSessionId);
+    setInput('');
+    setCurrentSources([]);
+    saveChatSession(newSession);
+    handleSend(undefined, seedPrompt, { session: newSession, sessionId: newSessionId });
+
+    // Clear navigation state so refresh doesn't resend.
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    (window as any).history?.replaceState?.({}, document.title);
+  }, [location, saveChatSession]);
 
   const handleNewChat = () => {
     setActiveSessionId(null);
@@ -171,6 +273,25 @@ const AIChat = () => {
           </div>
         </header>
 
+        {activeCourseContext && (
+          <div className="px-6 md:px-12 py-4 border-b border-slate-100 dark:border-slate-800 bg-white/70 dark:bg-slate-950/70 backdrop-blur-xl">
+            <div className="max-w-3xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                Discussing: <span className="text-primary-600">{activeCourseContext.title}</span>
+                <span className="text-slate-400 font-black text-[11px] ml-2">({activeCourseContext.courseId})</span>
+              </div>
+              <div className="text-xs font-bold">
+                <Link
+                  to={`/courses/${activeCourseContext.courseId}`}
+                  className="text-primary-600 hover:text-primary-700 hover:underline"
+                >
+                  Back to course
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 md:px-12 py-12 scrollbar-hide" ref={scrollRef}>
           <div className="max-w-3xl mx-auto space-y-10">
@@ -188,7 +309,12 @@ const AIChat = () => {
                   </div>
                   <div className="max-w-[85%] space-y-2">
                     <div className={`px-6 py-4 rounded-3xl text-[15px] leading-relaxed shadow-premium ${msg.role === 'user' ? 'bg-slate-900 text-white rounded-tr-none' : 'bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-tl-none font-medium'}`}>
-                      {msg.text || (isTyping && i === activeSession.messages.length - 1 ? <div className="flex gap-1 py-1.5"><div className="w-2 h-2 bg-primary-400 rounded-full animate-bounce"></div><div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce delay-100"></div><div className="w-2 h-2 bg-primary-600 rounded-full animate-bounce delay-200"></div></div> : null)}
+                      {msg.role === 'bot' ? (
+                        <ReactMarkdown>{msg.text || ''}</ReactMarkdown>
+                      ) : (
+                        msg.text
+                      )}
+                      {(isTyping && i === activeSession.messages.length - 1) ? <div className="flex gap-1 py-1.5"><div className="w-2 h-2 bg-primary-400 rounded-full animate-bounce"></div><div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce delay-100"></div><div className="w-2 h-2 bg-primary-600 rounded-full animate-bounce delay-200"></div></div> : null}
                     </div>
                     {msg.role === 'bot' && currentSources.length > 0 && i === activeSession.messages.length - 1 && (
                       <div className="flex flex-wrap gap-2 pt-2">

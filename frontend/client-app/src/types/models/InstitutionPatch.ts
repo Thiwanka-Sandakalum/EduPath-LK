@@ -5,6 +5,7 @@
 export type InstitutionPatch = {
     name?: string;
     institution_code?: string;
+    image_url?: string;
     description?: string;
     type?: Array<string>;
     country?: string;

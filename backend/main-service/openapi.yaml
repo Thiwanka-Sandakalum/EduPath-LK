@@ -11,8 +11,623 @@ tags:
     description: Program management operations
   - name: Search
     description: Search and filtering operations
+  - name: Universities
+    description: Government university management operations
+  - name: Degree Programs
+    description: Degree program management operations
+  - name: Course Offerings
+    description: Course offering management operations
+  - name: Analytics
+    description: View tracking and reporting
 
 paths:
+  /universities:
+    get:
+      tags:
+        - Universities
+      summary: List all universities
+      description: Retrieve a paginated list of universities with optional filtering
+      operationId: listUniversities
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: location
+          in: query
+          schema:
+            type: string
+        - name: sort
+          in: query
+          schema:
+            type: string
+            default: name:asc
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/University"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags:
+        - Universities
+      summary: Create a new university
+      operationId: createUniversity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UniversityCreate"
+      responses:
+        "201":
+          description: University created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/University"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /analytics/scholarships/{scholarshipId}/view:
+    post:
+      tags:
+        - Analytics
+      summary: Track a scholarship view
+      description: Records a view event when a client user opens scholarship details.
+      operationId: trackScholarshipView
+      parameters:
+        - name: scholarshipId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScholarshipViewEvent"
+      responses:
+        "204":
+          description: View recorded
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /analytics/scholarships/{scholarshipId}:
+    get:
+      tags:
+        - Analytics
+      summary: Get scholarship analytics
+      description: Returns total views and unique viewers, plus last 14 days breakdown.
+      operationId: getScholarshipAnalytics
+      parameters:
+        - name: scholarshipId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScholarshipAnalytics"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /universities/{universityId}:
+    get:
+      tags:
+        - Universities
+      summary: Get university by ID
+      operationId: getUniversity
+      parameters:
+        - name: universityId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/University"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags:
+        - Universities
+      summary: Update university
+      operationId: updateUniversity
+      parameters:
+        - name: universityId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+
+              $ref: "#/components/schemas/UniversityUpdate"
+      responses:
+        "200":
+          description: University updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/University"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags:
+        - Universities
+      summary: Partially update university
+      operationId: patchUniversity
+      parameters:
+        - name: universityId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UniversityPatch"
+      responses:
+        "200":
+          description: University updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/University"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags:
+        - Universities
+      summary: Delete university
+      operationId: deleteUniversity
+      parameters:
+        - name: universityId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: University deleted successfully
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /degree-programs:
+    get:
+      tags:
+        - Degree Programs
+      summary: List all degree programs
+      operationId: listDegreePrograms
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: title
+          in: query
+          schema:
+            type: string
+        - name: stream
+          in: query
+          schema:
+            type: string
+        - name: sort
+          in: query
+          schema:
+            type: string
+            default: title:asc
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DegreeProgram"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags:
+        - Degree Programs
+      summary: Create a new degree program
+      operationId: createDegreeProgram
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DegreeProgramCreate"
+      responses:
+        "201":
+          description: Degree program created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DegreeProgram"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /degree-programs/{degreeProgramId}:
+    get:
+      tags:
+        - Degree Programs
+      summary: Get degree program by ID
+      operationId: getDegreeProgram
+      parameters:
+        - name: degreeProgramId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DegreeProgram"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags:
+        - Degree Programs
+      summary: Update degree program
+      operationId: updateDegreeProgram
+      parameters:
+        - name: degreeProgramId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DegreeProgramUpdate"
+      responses:
+        "200":
+          description: Degree program updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DegreeProgram"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags:
+        - Degree Programs
+      summary: Partially update degree program
+      operationId: patchDegreeProgram
+      parameters:
+        - name: degreeProgramId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DegreeProgramPatch"
+      responses:
+        "200":
+          description: Degree program updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DegreeProgram"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags:
+        - Degree Programs
+      summary: Delete degree program
+      operationId: deleteDegreeProgram
+      parameters:
+        - name: degreeProgramId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Degree program deleted successfully
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /course-offerings:
+    get:
+      tags:
+        - Course Offerings
+      summary: List all course offerings
+      operationId: listCourseOfferings
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: degree_program_id
+          in: query
+          schema:
+            type: string
+        - name: university_id
+          in: query
+          schema:
+            type: string
+        - name: academic_year
+          in: query
+          schema:
+            type: string
+        - name: sort
+          in: query
+          schema:
+            type: string
+            default: _id:asc
+        - name: stream
+          in: query
+          schema:
+            type: string
+          description: Filter by A/L stream
+        - name: degree
+          in: query
+          schema:
+            type: string
+          description: Filter by degree/program title
+        - name: university
+          in: query
+          schema:
+            type: string
+          description: Filter by university name
+        - name: aptitude
+          in: query
+          schema:
+            type: boolean
+          description: Filter by aptitude test requirement
+        - name: medium
+          in: query
+          schema:
+            type: string
+          description: Filter by medium of instruction
+        - name: district
+          in: query
+          schema:
+            type: string
+          description: Filter by applicant's district
+        - name: z_score
+          in: query
+          schema:
+            type: number
+          description: Filter by applicant's Z-score
+        - name: eligible_only
+          in: query
+          schema:
+            type: boolean
+          description: Return only courses the applicant is eligible for
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CourseOffering"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags:
+        - Course Offerings
+      summary: Create a new course offering
+      operationId: createCourseOffering
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseOfferingCreate"
+      responses:
+        "201":
+          description: Course offering created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseOffering"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /course-offerings/{courseOfferingId}:
+    get:
+      tags:
+        - Course Offerings
+      summary: Get course offering by ID
+      operationId: getCourseOffering
+      parameters:
+        - name: courseOfferingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseOffering"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags:
+        - Course Offerings
+      summary: Update course offering
+      operationId: updateCourseOffering
+      parameters:
+        - name: courseOfferingId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseOfferingUpdate"
+      responses:
+        "200":
+          description: Course offering updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseOffering"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags:
+        - Course Offerings
+      summary: Partially update course offering
+      operationId: patchCourseOffering
+      parameters:
+        - name: courseOfferingId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseOfferingPatch"
+      responses:
+        "200":
+          description: Course offering updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseOffering"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags:
+        - Course Offerings
+      summary: Delete course offering
+      operationId: deleteCourseOffering
+      parameters:
+        - name: courseOfferingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Course offering deleted successfully
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /institutions:
     get:
       tags:
@@ -582,6 +1197,231 @@ paths:
 
 components:
   schemas:
+    University:
+      type: object
+      required:
+        - _id
+        - name
+        - abbreviation
+        - type
+        - contact
+        - location
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        abbreviation:
+          type: string
+        type:
+          type: string
+        contact:
+          type: object
+          properties:
+            address:
+              type: string
+            phone:
+              type: array
+              items:
+                type: string
+            website:
+              type: string
+        location:
+          type: string
+    UniversityCreate:
+      type: object
+      required:
+        - _id
+        - name
+        - abbreviation
+        - type
+        - contact
+        - location
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        abbreviation:
+          type: string
+        type:
+          type: string
+        contact:
+          type: object
+          properties:
+            address:
+              type: string
+            phone:
+              type: array
+              items:
+                type: string
+            website:
+              type: string
+        location:
+          type: string
+    UniversityUpdate:
+      allOf:
+        - $ref: "#/components/schemas/UniversityCreate"
+    UniversityPatch:
+      type: object
+      properties:
+        name:
+          type: string
+        abbreviation:
+          type: string
+        type:
+          type: string
+        contact:
+          type: object
+          properties:
+            address:
+              type: string
+            phone:
+              type: array
+              items:
+                type: string
+            website:
+              type: string
+        location:
+          type: string
+
+    DegreeProgram:
+      type: object
+      required:
+        - _id
+        - title
+        - stream
+        - duration_years
+        - medium_of_instruction
+        - al_requirements
+        - ol_requirements
+        - aptitude_test_required
+      properties:
+        _id:
+          type: string
+        title:
+          type: string
+        stream:
+          type: string
+        duration_years:
+          type: integer
+        medium_of_instruction:
+          type: array
+          items:
+            type: string
+        al_requirements:
+          type: object
+          properties:
+            logic_type:
+              type: string
+            minimum_grade_required:
+              type: string
+            subjects:
+              type: array
+              items:
+                type: string
+            special_notes:
+              type: string
+        ol_requirements:
+          type: array
+          items:
+            type: object
+            properties:
+              subject:
+                type: string
+              min_grade:
+                type: string
+        aptitude_test_required:
+          type: boolean
+    DegreeProgramCreate:
+      allOf:
+        - $ref: "#/components/schemas/DegreeProgram"
+    DegreeProgramUpdate:
+      allOf:
+        - $ref: "#/components/schemas/DegreeProgram"
+    DegreeProgramPatch:
+      type: object
+      properties:
+        title:
+          type: string
+        stream:
+          type: string
+        duration_years:
+          type: integer
+        medium_of_instruction:
+          type: array
+          items:
+            type: string
+        al_requirements:
+          type: object
+          properties:
+            logic_type:
+              type: string
+            minimum_grade_required:
+              type: string
+            subjects:
+              type: array
+              items:
+                type: string
+            special_notes:
+              type: string
+        ol_requirements:
+          type: array
+          items:
+            type: object
+            properties:
+              subject:
+                type: string
+              min_grade:
+                type: string
+        aptitude_test_required:
+          type: boolean
+
+    CourseOffering:
+      type: object
+      required:
+        - _id
+        - degree_program_id
+        - university_id
+        - academic_year
+        - proposed_intake
+        - cutoff_marks
+      properties:
+        _id:
+          type: string
+        degree_program_id:
+          type: string
+        university_id:
+          type: string
+        academic_year:
+          type: string
+        proposed_intake:
+          type: integer
+        cutoff_marks:
+          type: object
+          additionalProperties:
+            type: number
+    CourseOfferingCreate:
+      allOf:
+        - $ref: "#/components/schemas/CourseOffering"
+    CourseOfferingUpdate:
+      allOf:
+        - $ref: "#/components/schemas/CourseOffering"
+    CourseOfferingPatch:
+      type: object
+      properties:
+        degree_program_id:
+          type: string
+        university_id:
+          type: string
+        academic_year:
+          type: string
+        proposed_intake:
+          type: integer
+        cutoff_marks:
+          type: object
+          additionalProperties:
+            type: number
     Institution:
       type: object
       required:
@@ -1005,6 +1845,59 @@ components:
         details:
           type: object
           additionalProperties: true
+
+    ScholarshipViewEvent:
+      type: object
+      description: Optional view event payload for de-duplicating unique viewers.
+      properties:
+        viewer_id:
+          type: string
+          description: Logged-in user id (if available).
+          example: "user_123"
+        session_id:
+          type: string
+          description: Anonymous session id stored on the client.
+          example: "sess_9f1c2a3b4c"
+
+    ScholarshipAnalyticsDay:
+      type: object
+      required:
+        - date
+        - views
+        - unique_viewers
+      properties:
+        date:
+          type: string
+          description: ISO date (YYYY-MM-DD)
+          example: "2026-02-03"
+        views:
+          type: integer
+          example: 12
+        unique_viewers:
+          type: integer
+          example: 7
+
+    ScholarshipAnalytics:
+      type: object
+      required:
+        - scholarship_id
+        - total_views
+        - total_unique_viewers
+        - last_14_days
+      properties:
+        scholarship_id:
+          type: string
+          example: "sch_abc123"
+        total_views:
+          type: integer
+          example: 120
+        total_unique_viewers:
+          type: integer
+          example: 85
+        last_14_days:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScholarshipAnalyticsDay"
 
   responses:
     BadRequest:
