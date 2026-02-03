@@ -686,14 +686,14 @@ const CourseDetail = () => {
             {Object.entries(breakdown).map(([group, fees]: any, idx) => {
                if (!fees || typeof fees !== 'object') return null;
                return (
-               <div key={idx} className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-                  <div className="font-bold text-slate-700 mb-1">{group}</div>
-                  <ul className="text-slate-600 text-sm space-y-1">
-                     {Object.entries(fees).map(([label, value]: any, i) => (
-                        <li key={i}><span className="font-medium">{label}:</span> {value?.toLocaleString?.() ?? value}</li>
-                     ))}
-                  </ul>
-               </div>
+                  <div key={idx} className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                     <div className="font-bold text-slate-700 mb-1">{group}</div>
+                     <ul className="text-slate-600 text-sm space-y-1">
+                        {Object.entries(fees).map(([label, value]: any, i) => (
+                           <li key={i}><span className="font-medium">{label}:</span> {value?.toLocaleString?.() ?? value}</li>
+                        ))}
+                     </ul>
+                  </div>
                );
             })}
          </div>
@@ -864,35 +864,35 @@ const CourseDetail = () => {
 
          <div className="container mx-auto px-4 relative z-20">
 
-                  {/* 2. MODERN STATS CARD (like uploaded image) */}
-                  <div className="w-full bg-white rounded-[2rem] shadow-xl shadow-slate-200/50 -mt-12 mb-12 border border-slate-100 flex flex-col md:flex-row items-stretch text-center overflow-x-auto">
-                     {/* Duration */}
-                     <div className="flex-1 flex flex-col justify-center px-8 py-8 min-w-[220px] border-b md:border-b-0 md:border-r border-slate-100">
-                        <div className="flex items-center justify-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                           <Clock size={20} className="text-blue-500" /> Duration
-                        </div>
-                        <div className="text-2xl font-bold text-slate-900">
-                              {formatDuration(course.duration)}
-                        </div>
-                     </div>
-                     {/* Next Intake */}
-                     <div className="flex-1 flex flex-col justify-center px-8 py-8 min-w-[220px]">
-                        <div className="flex items-center justify-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                           <Calendar size={20} className="text-amber-500" /> Next Intake
-                        </div>
-                        <div className="text-2xl font-bold text-slate-900">
-                           {(() => {
-                              if (course.deadline && course.deadline !== 'N/A') return course.deadline;
-                              // Auto-generate: next year, same month as today
-                              const now = new Date();
-                              const nextYear = now.getFullYear() + 1;
-                              const month = now.toLocaleString('default', { month: 'long' });
-                              return `${month} ${nextYear}`;
-                           })()}
-                        </div>
-                     </div>
+            {/* 2. MODERN STATS CARD (like uploaded image) */}
+            <div className="w-full bg-white rounded-[2rem] shadow-xl shadow-slate-200/50 -mt-12 mb-12 border border-slate-100 flex flex-col md:flex-row items-stretch text-center overflow-x-auto">
+               {/* Duration */}
+               <div className="flex-1 flex flex-col justify-center px-8 py-8 min-w-[220px] border-b md:border-b-0 md:border-r border-slate-100">
+                  <div className="flex items-center justify-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                     <Clock size={20} className="text-blue-500" /> Duration
                   </div>
-            
+                  <div className="text-2xl font-bold text-slate-900">
+                     {formatDuration(course.duration)}
+                  </div>
+               </div>
+               {/* Next Intake */}
+               <div className="flex-1 flex flex-col justify-center px-8 py-8 min-w-[220px]">
+                  <div className="flex items-center justify-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                     <Calendar size={20} className="text-amber-500" /> Next Intake
+                  </div>
+                  <div className="text-2xl font-bold text-slate-900">
+                     {(() => {
+                        if (course.deadline && course.deadline !== 'N/A') return course.deadline;
+                        // Auto-generate: next year, same month as today
+                        const now = new Date();
+                        const nextYear = now.getFullYear() + 1;
+                        const month = now.toLocaleString('default', { month: 'long' });
+                        return `${month} ${nextYear}`;
+                     })()}
+                  </div>
+               </div>
+            </div>
+
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
 
@@ -1015,7 +1015,7 @@ const CourseDetail = () => {
                      ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
                            {relatedCourses.map((rc) => {
-                                 const rcId = extractId((rc as any)?._id) ?? extractId((rc as any)?.id);
+                              const rcId = extractId((rc as any)?._id) ?? extractId((rc as any)?.id);
                               const categories: string[] = Array.isArray(rc?.specializations)
                                  ? rc.specializations.filter((v: any) => typeof v === 'string' && v.trim())
                                  : [];
