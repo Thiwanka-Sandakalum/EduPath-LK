@@ -37,7 +37,7 @@ export class InstitutionsService {
             url: '/institutions',
             query: {
                 'page': page,
-                'limit': limit,
+                'limit': 20,
                 'country': country,
                 'type': type,
                 'sort': sort,
