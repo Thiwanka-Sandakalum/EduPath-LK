@@ -6,6 +6,7 @@
       "name": "University of Colombo",
       "unicode_suffix": "A",
       "type": "University",
+      "description": "A public research university in Colombo and one of Sri Lanka's oldest modern higher-education institutions, with roots in the Ceylon Medical School (1870).",
       "contact": {
         "address": "94, Cumaratunga Munidasa Mawatha, Colombo 03",
         "phone": [
@@ -24,6 +25,7 @@
       "name": "University of Peradeniya",
       "unicode_suffix": "B",
       "type": "University",
+      "description": "A public university in Peradeniya known for its large residential campus; it traces its origins to the University of Ceylon established in 1942.",
       "contact": {
         "address": "Peradeniya",
         "phone": [
@@ -42,6 +44,7 @@
       "name": "University of Sri Jayewardenepura",
       "unicode_suffix": "C",
       "type": "University",
+      "description": "A public university in Gangodawila, Nugegoda, with historical roots in the Vidyodaya Pirivena (founded 1873) and later upgraded to university status.",
       "contact": {
         "address": "Gangodawila, Nugegoda",
         "phone": [
@@ -60,6 +63,7 @@
       "name": "University of Kelaniya",
       "unicode_suffix": "D",
       "type": "University",
+      "description": "A public university in Kelaniya near Colombo offering a wide range of disciplines; it was established as a university in 1959.",
       "contact": {
         "address": "Dalugama, Kelaniya",
         "phone": [
@@ -76,6 +80,7 @@
       "name": "University of Jaffna",
       "unicode_suffix": "E",
       "type": "University",
+      "description": "A public university in Jaffna, established in 1974 and serving the Northern Province with multiple faculties and regional campuses.",
       "contact": {
         "address": "P.O. Box 57, Thirunelvely, Jaffna",
         "phone": [
@@ -93,6 +98,7 @@
       "name": "University of Ruhuna",
       "unicode_suffix": "F",
       "type": "University",
+      "description": "A public university in Matara (Southern Province), established in 1978 and expanded into a comprehensive university with several faculties and research centres.",
       "contact": {
         "address": "Wellamadama, Matara",
         "phone": [
@@ -110,6 +116,7 @@
       "name": "University of Moratuwa",
       "unicode_suffix": "G",
       "type": "University",
+      "description": "A public university in Moratuwa best known for engineering, architecture and IT programmes; it became an independent university in 1978.",
       "contact": {
         "address": "Bandaranayake Mawatha, Moratuwa",
         "phone": [
@@ -127,6 +134,7 @@
       "name": "Eastern University, Sri Lanka",
       "unicode_suffix": "H",
       "type": "University",
+      "description": "A public university in Vantharamoolai/Chenkalady (Eastern Province), established in 1986, with multiple faculties and a campus in Trincomalee.",
       "contact": {
         "address": "Vantharamoolai, Chenkalady",
         "phone": [
@@ -145,6 +153,7 @@
       "name": "South Eastern University of Sri Lanka",
       "unicode_suffix": "J",
       "type": "University",
+      "description": "A public university in Oluvil founded in the mid-1990s, serving the Eastern Province with programmes across applied sciences, management and the humanities.",
       "contact": {
         "address": "University Park, Oluvil",
         "phone": [
@@ -163,6 +172,7 @@
       "name": "Rajarata University of Sri Lanka",
       "unicode_suffix": "K",
       "type": "University",
+      "description": "A public university headquartered in Mihintale near Anuradhapura, established in 1995 to serve the North Central Province.",
       "contact": {
         "address": "Mihintale",
         "phone": [
@@ -179,6 +189,7 @@
       "name": "Sabaragamuwa University of Sri Lanka",
       "unicode_suffix": "L",
       "type": "University",
+      "description": "A public university in Belihuloya that evolved from a university college in the early 1990s and gained university status in 1995.",
       "contact": {
         "address": "P.O. Box 02, Pambahinna, Belihuloya",
         "phone": [
@@ -196,6 +207,7 @@
       "name": "Wayamba University of Sri Lanka",
       "unicode_suffix": "M",
       "type": "University",
+      "description": "A national public university with main centres in Kuliyapitiya and Makandura, established as a university in 1999.",
       "contact": {
         "address": "Lionel Jayathilake Mawatha, Kanadulla, Kuliyapitiya",
         "phone": [
@@ -213,6 +225,7 @@
       "name": "Gampaha Wickramarachchi University of Indigenous Medicine",
       "unicode_suffix": "P",
       "type": "University",
+      "description": "A public university in Yakkala specializing in indigenous medicine and Ayurveda, developed from a long-running training institute founded in 1929.",
       "contact": {
         "address": "Yakkala",
         "phone": [
@@ -229,6 +242,7 @@
       "name": "University of Vavuniya, Sri Lanka",
       "unicode_suffix": "R",
       "type": "University",
+      "description": "A public university in Vavuniya established in 2021 after operating for years as a campus of the University of Jaffna.",
       "contact": {
         "address": "Pampaaimadu, Vavuniya",
         "phone": [
@@ -246,6 +260,7 @@
       "name": "Sripalee Campus, University of Colombo",
       "unicode_suffix": "S",
       "type": "Campus",
+      "description": "A campus of the University of Colombo in Horana, established in 1996 and known for programmes in mass media and performing arts.",
       "contact": {
         "address": "Wewala, Horana",
         "phone": [
@@ -262,6 +277,7 @@
       "name": "University of Colombo School of Computing",
       "unicode_suffix": "T",
       "type": "Institute",
+      "description": "A computing and IT institute of the University of Colombo on Reid Avenue, offering undergraduate, postgraduate and external degree programmes and hosting multiple research groups.",
       "contact": {
         "address": "No 35, Reid Avenue, Colombo 07",
         "phone": [
@@ -279,6 +295,7 @@
       "name": "Uva Wellassa University of Sri Lanka",
       "unicode_suffix": "U",
       "type": "University",
+      "description": "A public national university in Badulla established in 2005 to serve Uva Province, offering applied sciences, management and technology-focused programmes.",
       "contact": {
         "address": "2nd Milepost, Passara Road, Badulla",
         "phone": [
@@ -295,6 +312,7 @@
       "name": "Trincomalee Campus, Eastern University",
       "unicode_suffix": "W",
       "type": "Campus",
+      "description": "A regional campus of Eastern University in Nilaveli/Trincomalee, offering degree programmes in areas such as applied sciences and communication/business studies.",
       "contact": {
         "address": "Konesapuri, Nilavely, Trincomalee",
         "phone": [
@@ -311,6 +329,7 @@
       "name": "Swamy Vipulananda Institute of Aesthetic Studies",
       "unicode_suffix": "Y",
       "type": "Institute",
+      "description": "An institute affiliated with Eastern University in Kallady, Batticaloa, focused on fine arts and aesthetic studies including music, dance, drama and visual arts.",
       "contact": {
         "address": "Kallady, Batticaloa",
         "phone": [
@@ -327,6 +346,7 @@
       "name": "University of the Visual & Performing Arts",
       "unicode_suffix": "Z",
       "type": "University",
+      "description": "A public specialized university in Colombo dedicated to visual and performing arts, established as a university in 2005.",
       "contact": {
         "address": "21, Albert Crescent, Colombo 07",
         "phone": [

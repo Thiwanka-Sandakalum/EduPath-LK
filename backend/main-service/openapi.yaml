@@ -17,6 +17,8 @@ tags:
     description: Degree program management operations
   - name: Course Offerings
     description: Course offering management operations
+  - name: Analytics
+    description: View tracking and reporting
 
 paths:
   /universities:
@@ -88,6 +90,57 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "500":
           $ref: "#/components/responses/InternalError"
+  /analytics/scholarships/{scholarshipId}/view:
+    post:
+      tags:
+        - Analytics
+      summary: Track a scholarship view
+      description: Records a view event when a client user opens scholarship details.
+      operationId: trackScholarshipView
+      parameters:
+        - name: scholarshipId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScholarshipViewEvent"
+      responses:
+        "204":
+          description: View recorded
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /analytics/scholarships/{scholarshipId}:
+    get:
+      tags:
+        - Analytics
+      summary: Get scholarship analytics
+      description: Returns total views and unique viewers, plus last 14 days breakdown.
+      operationId: getScholarshipAnalytics
+      parameters:
+        - name: scholarshipId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScholarshipAnalytics"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /universities/{universityId}:
     get:
       tags:
@@ -110,6 +163,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
+
           $ref: "#/components/responses/InternalError"
     put:
       tags:
@@ -127,6 +181,7 @@ paths:
         content:
           application/json:
             schema:
+
               $ref: "#/components/schemas/UniversityUpdate"
       responses:
         "200":
@@ -1790,6 +1845,59 @@ components:
         details:
           type: object
           additionalProperties: true
+
+    ScholarshipViewEvent:
+      type: object
+      description: Optional view event payload for de-duplicating unique viewers.
+      properties:
+        viewer_id:
+          type: string
+          description: Logged-in user id (if available).
+          example: "user_123"
+        session_id:
+          type: string
+          description: Anonymous session id stored on the client.
+          example: "sess_9f1c2a3b4c"
+
+    ScholarshipAnalyticsDay:
+      type: object
+      required:
+        - date
+        - views
+        - unique_viewers
+      properties:
+        date:
+          type: string
+          description: ISO date (YYYY-MM-DD)
+          example: "2026-02-03"
+        views:
+          type: integer
+          example: 12
+        unique_viewers:
+          type: integer
+          example: 7
+
+    ScholarshipAnalytics:
+      type: object
+      required:
+        - scholarship_id
+        - total_views
+        - total_unique_viewers
+        - last_14_days
+      properties:
+        scholarship_id:
+          type: string
+          example: "sch_abc123"
+        total_views:
+          type: integer
+          example: 120
+        total_unique_viewers:
+          type: integer
+          example: 85
+        last_14_days:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScholarshipAnalyticsDay"
 
   responses:
     BadRequest:

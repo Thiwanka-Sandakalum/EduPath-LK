@@ -67,6 +67,30 @@ const CoursesPage = () => {
 
   const { toggleSavedCourse, savedCourses } = useAppStore();
 
+  const getPaginationItems = (page: number, total: number) => {
+    if (total <= 1) return [1];
+    const items: Array<number | '...'> = [];
+    const clamp = (n: number) => Math.max(1, Math.min(total, n));
+    const current = clamp(page);
+
+    const neighbors = 1; // show current +/- 1
+    const start = clamp(current - neighbors);
+    const end = clamp(current + neighbors);
+
+    items.push(1);
+    if (start > 2) items.push('...');
+
+    for (let p = Math.max(2, start); p <= Math.min(total - 1, end); p++) {
+      items.push(p);
+    }
+
+    if (end < total - 1) items.push('...');
+    if (total > 1) items.push(total);
+
+    // De-dup in edge cases (e.g. total=2)
+    return items.filter((v, idx) => items.indexOf(v) === idx);
+  };
+
   const extractId = (value: unknown): string | null => {
     if (typeof value === 'string') {
       const trimmed = value.trim();
@@ -100,11 +124,13 @@ const CoursesPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [pageSize, setPageSize] = useState(12);
+  const pageSizeOptions = [12, 24, 36, 48];
 
   // State for institutions
   const [institutions, setInstitutions] = useState<InstitutionView[]>([]);
   const [instLoading, setInstLoading] = useState(false);
   const [instError, setInstError] = useState<string | null>(null);
+  const [initialInstitutionDataLoaded, setInitialInstitutionDataLoaded] = useState(false);
 
   // Government data (JSON)
   const [governmentPrograms, setGovernmentPrograms] = useState<GovernmentDegreeProgram[]>([]);
@@ -247,7 +273,13 @@ const CoursesPage = () => {
       .catch(() => {
         setInstError('Failed to load institutions');
       })
-      .finally(() => setInstLoading(false));
+      .finally(() => {
+        setInstLoading(false);
+        // Mark that the initial institution + government JSON load attempt is done.
+        // This helps avoid rendering private-only results first and then re-rendering
+        // when government datasets arrive.
+        setInitialInstitutionDataLoaded(true);
+      });
 
     // Fetch distinct values for dropdowns
     ProgramsService.getProgramDistinctValues('level').then(res => setLevels(res.values || []));
@@ -373,13 +405,29 @@ const CoursesPage = () => {
 
   // Fetch courses with filters and pagination
   useEffect(() => {
-    setLoading(true);
-    setError(null);
+    let cancelled = false;
+
     const normalizedClassification = filterClassification.trim().toLowerCase();
     const isGovernmentOnly = normalizedClassification === 'government';
     const isPrivateOnly = normalizedClassification === 'private';
     const includeGovernment = !isPrivateOnly;
     const includeBackend = !isGovernmentOnly;
+
+    const selectedInstitution = filterInstitution
+      ? institutions.find((i) => String(i?._id) === String(filterInstitution))
+      : undefined;
+    const isSelectedGovernmentInstitution = selectedInstitution?.classification === 'Government';
+    const isGovernmentOnlyEffective = isGovernmentOnly || (isSelectedGovernmentInstitution && !isPrivateOnly);
+
+    // Avoid a two-phase UI (private first, then all): for "All" (and Government-only)
+    // we wait until the initial institution + government JSON load attempt completes.
+    const needsGovernmentDatasets = includeGovernment && (isGovernmentOnlyEffective || (!filterClassification && currentPage === 1));
+    if (needsGovernmentDatasets && !initialInstitutionDataLoaded) {
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
 
     const normalizeGovCourses = () => {
       const nameQ = filterName.trim().toLowerCase();
@@ -436,15 +484,98 @@ const CoursesPage = () => {
       });
     };
 
-    if (isGovernmentOnly) {
+    if (isGovernmentOnlyEffective) {
       const govCourses = includeGovernment ? normalizeGovCourses() : [];
       const total = govCourses.length;
       const totalP = Math.max(1, Math.ceil(total / pageSize));
       const start = (currentPage - 1) * pageSize;
-      setCourses(govCourses.slice(start, start + pageSize));
-      setTotalPages(totalP);
-      setLoading(false);
+      if (!cancelled) {
+        setCourses(govCourses.slice(start, start + pageSize));
+        setTotalPages(totalP);
+        setLoading(false);
+      }
       return;
+    }
+
+    const fetchPrivateWindow = async (startIndex: number, count: number) => {
+      if (!includeBackend || count <= 0) return { items: [] as any[], total: 0 };
+
+      const page0 = Math.floor(startIndex / pageSize) + 1;
+      const offset0 = startIndex % pageSize;
+
+      const res0 = await ProgramsService.listPrograms(
+        page0,
+        pageSize,
+        filterInstitution || undefined,
+        filterName || undefined,
+        filterLevel || undefined,
+        filterDeliveryMode || undefined,
+        filterSpecialization || undefined,
+        filterDuration || undefined,
+        filterEligibility || undefined
+      );
+
+      const list0 = (res0.data || []) as any[];
+      const totalRaw: any = (res0.pagination as any)?.total;
+      const total = Number(totalRaw);
+      const privateTotal = Number.isFinite(total) && total >= 0 ? total : 0;
+
+      let items = list0.slice(offset0, offset0 + count);
+
+      if (items.length < count) {
+        const res1 = await ProgramsService.listPrograms(
+          page0 + 1,
+          pageSize,
+          filterInstitution || undefined,
+          filterName || undefined,
+          filterLevel || undefined,
+          filterDeliveryMode || undefined,
+          filterSpecialization || undefined,
+          filterDuration || undefined,
+          filterEligibility || undefined
+        );
+        const list1 = (res1.data || []) as any[];
+        items = items.concat(list1.slice(0, count - items.length));
+      }
+
+      return { items, total: privateTotal };
+    };
+
+    // "All" view: combine Government + Private into one paginated list.
+    // This ensures we always render exactly `pageSize` items per page and show proper page numbers.
+    if (!filterClassification) {
+      const govCourses = includeGovernment ? normalizeGovCourses() : [];
+      const govCount = govCourses.length;
+
+      const startIndex = (currentPage - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+
+      const govSlice = startIndex < govCount ? govCourses.slice(startIndex, Math.min(endIndex, govCount)) : [];
+      const remaining = Math.max(0, pageSize - govSlice.length);
+      const privateStartIndex = Math.max(0, startIndex - govCount);
+
+      fetchPrivateWindow(privateStartIndex, remaining)
+        .then(({ items: privateSlice, total: privateTotal }) => {
+          if (cancelled) return;
+          const combinedTotal = govCount + privateTotal;
+          const combinedTotalPages = Math.max(1, Math.ceil(combinedTotal / pageSize));
+          setCourses([...govSlice, ...privateSlice]);
+          setTotalPages(combinedTotalPages);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setError('Failed to load courses');
+          setCourses([]);
+          setTotalPages(1);
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setLoading(false);
+        });
+
+      return () => {
+        cancelled = true;
+      };
     }
 
     const isClassificationOnlyMode = Boolean(filterClassification && !filterInstitution);
@@ -509,22 +640,29 @@ const CoursesPage = () => {
             })
           : list;
 
-        // Inject Government programs only when classification is All (empty) and on page 1,
-        // so users can see them without breaking backend pagination.
-        if (includeGovernment && !filterClassification && currentPage === 1) {
-          const govCourses = normalizeGovCourses();
-          // Put gov courses first.
-          setCourses([...govCourses, ...filtered]);
+        setCourses(filtered);
+
+        const tpRaw: any = (res.pagination as any)?.total_pages;
+        const totalRaw: any = (res.pagination as any)?.total;
+        const apiTotalPages = Number(tpRaw);
+        const apiTotal = Number(totalRaw);
+
+        if (Number.isFinite(apiTotalPages) && apiTotalPages > 0) {
+          setTotalPages(apiTotalPages);
+        } else if (Number.isFinite(apiTotal) && apiTotal > 0) {
+          setTotalPages(Math.ceil(apiTotal / pageSize));
         } else {
-          setCourses(filtered);
+          setTotalPages(1);
         }
-        setTotalPages(res.pagination?.total ? Math.ceil(res.pagination.total / pageSize) : 1);
       })
       .catch(() => {
         setError('Failed to load courses');
       })
       .finally(() => setLoading(false));
-  }, [currentPage, pageSize, filterClassification, filterInstitution, filterLevel, filterDeliveryMode, filterSpecialization, filterName, filterDuration, filterEligibility, visibleInstitutions, institutions, governmentPrograms, governmentOfferings]);
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPage, pageSize, filterClassification, filterInstitution, filterLevel, filterDeliveryMode, filterSpecialization, filterName, filterDuration, filterEligibility, visibleInstitutions, institutions, governmentPrograms, governmentOfferings, initialInstitutionDataLoaded]);
 
 
 
@@ -741,23 +879,70 @@ const CoursesPage = () => {
                 );
               })}
             </div>
+
+            {/* Page size selector (always visible) */}
+            <div className="flex flex-col md:flex-row items-center justify-center gap-4 mt-12">
+              <div className="text-xs font-bold text-slate-500">Page {currentPage} of {totalPages}</div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500">Per page</span>
+                <select
+                  className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold text-slate-700"
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                >
+                  {pageSizeOptions.map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             {/* Pagination Controls */}
             {totalPages > 1 && (
-              <div className="flex justify-center items-center gap-2 mt-12">
-                <button
-                  className="px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 font-bold disabled:opacity-50"
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                >
-                  Prev
-                </button>
-                <button
-                  className="px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 font-bold disabled:opacity-50"
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  Next
-                </button>
+              <div className="flex flex-col items-center gap-4 mt-4">
+                <div className="flex flex-wrap justify-center items-center gap-2">
+                  <button
+                    className="px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 font-bold disabled:opacity-50"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Prev
+                  </button>
+
+                  {getPaginationItems(currentPage, totalPages).map((item, idx) => {
+                    if (item === '...') {
+                      return (
+                        <span key={`dots-${idx}`} className="px-2 text-slate-400 font-black select-none">…</span>
+                      );
+                    }
+
+                    const pageNum = item;
+                    const isActive = pageNum === currentPage;
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={
+                          'px-3 py-2 rounded-lg border font-black transition-all ' +
+                          (isActive
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-700')
+                        }
+                        aria-current={isActive ? 'page' : undefined}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    className="px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 font-bold disabled:opacity-50"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             )}
           </>

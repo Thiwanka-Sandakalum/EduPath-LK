@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
    ActionIcon,
    Alert,
@@ -7,26 +7,25 @@ import {
    Box,
    Button,
    Card,
-   Checkbox,
    Collapse,
+   Code,
    Divider,
-   Grid,
    Group,
    Loader,
+   Menu,
    Modal,
    MultiSelect,
-   NumberInput,
-   RangeSlider,
    Select,
+   SimpleGrid,
    Stack,
+   Table,
    Text,
    TextInput,
    Textarea,
-   ThemeIcon,
    Title,
    useMantineColorScheme,
 } from '@mantine/core';
-import { Award, DollarSign, ExternalLink, Filter, GraduationCap, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { ExternalLink, Eye, Filter, MoreVertical, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { InstitutionsService } from '../types/services/InstitutionsService';
 import { ProgramsService } from '../types/services/ProgramsService';
 import type { Institution } from '../types/models/Institution';
@@ -35,8 +34,14 @@ import { emitAdminDataChanged } from '../utils/adminEvents';
 
 const DELIVERY_MODES = ['On-campus', 'Online', 'Hybrid', 'Distance'];
 
-const GOVERNMENT_INSTITUTION_FILTER_VALUE = '__GOV__';
 const GOVERNMENT_INSTITUTION_ID = 'GOV';
+
+const COURSES_FILTER_DEBUG_VERSION = '2026-02-03-a';
+
+const API_PAGE_LIMIT = 100;
+const PROGRAMS_PAGE_LIMIT = 100;
+
+const normalizeKey = (value: any) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
 
 const getErrorMessage = (err: any): string => {
    return err?.body?.message || err?.message || err?.statusText || 'Request failed';
@@ -60,7 +65,44 @@ type GovernmentDegreeProgramsPayload = {
    degreePrograms?: GovernmentDegreeProgram[];
 };
 
+const getGovernmentDegreeProgramsPublicUrl = () => {
+   const basePath = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '/');
+   const origin = typeof window !== 'undefined' ? window.location.origin : '';
+   return `${origin}${basePath}government-degree-programs.json`;
+};
+
+type GovernmentInstitution = {
+   _id: string;
+   name: string;
+};
+
+type GovernmentInstitutionsPayload = {
+   updatedAt?: string;
+   institutions?: GovernmentInstitution[];
+};
+
+const getGovernmentInstitutionsPublicUrl = () => {
+   const basePath = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '/');
+   const origin = typeof window !== 'undefined' ? window.location.origin : '';
+   return `${origin}${basePath}government-institutions.json`;
+};
+
 const stripBom = (text: string) => (text && text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
+
+const formatDuration = (duration: any): string => {
+   if (!duration || typeof duration !== 'object') return '—';
+   const years = typeof duration.years === 'number' ? duration.years : undefined;
+   const months = typeof duration.months === 'number' ? duration.months : undefined;
+   const weeks = typeof duration.weeks === 'number' ? duration.weeks : undefined;
+   const days = typeof duration.days === 'number' ? duration.days : undefined;
+
+   const parts: string[] = [];
+   if (years != null) parts.push(`${years} year${years === 1 ? '' : 's'}`);
+   if (months != null) parts.push(`${months} month${months === 1 ? '' : 's'}`);
+   if (weeks != null) parts.push(`${weeks} week${weeks === 1 ? '' : 's'}`);
+   if (days != null) parts.push(`${days} day${days === 1 ? '' : 's'}`);
+   return parts.length ? parts.join(' ') : '—';
+};
 
 const toIsoDate = (yyyyMmDd?: string) => {
    const raw = (yyyyMmDd || '').trim();
@@ -70,47 +112,10 @@ const toIsoDate = (yyyyMmDd?: string) => {
 };
 
 const isGovernmentProgram = (p: Program) => {
-   if (p.institution_id === GOVERNMENT_INSTITUTION_ID) return true;
+   const instKey = normalizeKey(safeString((p as any)?.institution_id));
+   if (instKey && instKey === normalizeKey(GOVERNMENT_INSTITUTION_ID)) return true;
    const src = (p as any)?.extensions?.source;
    return typeof src === 'string' && src.toLowerCase().includes('government');
-};
-
-const formatFees = (fees: any): string => {
-   if (!fees) return '—';
-   if (typeof fees === 'string' || typeof fees === 'number') return String(fees);
-   if (Array.isArray(fees)) return fees.filter(Boolean).join(', ') || '—';
-   if (typeof fees === 'object') {
-      const keys = Object.keys(fees);
-      if (keys.length === 0) return '—';
-      // Prefer common keys if present
-      const preferred = ['total', 'annual', 'per_year', 'per_semester', 'semester', 'lkr', 'usd'];
-      for (const k of preferred) {
-         if (fees[k] != null) return `${k}: ${String(fees[k])}`;
-      }
-      return keys.slice(0, 3).map((k) => `${k}: ${String(fees[k])}`).join(', ');
-   }
-   return '—';
-};
-
-const extractNumericFee = (fees: any): number | null => {
-   const seen = new Set<any>();
-   const walk = (v: any): number[] => {
-      if (v == null) return [];
-      if (typeof v === 'number' && Number.isFinite(v)) return [v];
-      if (typeof v === 'string') {
-         const m = v.replace(/,/g, '').match(/(\d+(?:\.\d+)?)/g);
-         if (!m) return [];
-         return m.map((x) => Number(x)).filter((n) => Number.isFinite(n));
-      }
-      if (typeof v !== 'object') return [];
-      if (seen.has(v)) return [];
-      seen.add(v);
-      if (Array.isArray(v)) return v.flatMap(walk);
-      return Object.values(v).flatMap(walk);
-   };
-   const nums = walk(fees).filter((n) => n > 0);
-   if (nums.length === 0) return null;
-   return Math.min(...nums);
 };
 
 const parseJsonOrEmpty = (value: string, fieldName: string): Record<string, any> | undefined => {
@@ -145,16 +150,13 @@ const Courses: React.FC = () => {
    const { colorScheme } = useMantineColorScheme();
    const isDark = colorScheme === 'dark';
    const [searchParams] = useSearchParams();
+   const navigate = useNavigate();
 
    const [programs, setPrograms] = useState<Program[]>([]);
    const [governmentPrograms, setGovernmentPrograms] = useState<Program[]>([]);
    const [governmentLoadError, setGovernmentLoadError] = useState<string | null>(null);
+   const [governmentInstitutions, setGovernmentInstitutions] = useState<GovernmentInstitution[]>([]);
    const [institutions, setInstitutions] = useState<Institution[]>([]);
-   const institutionMap = useMemo(() => {
-      const m = new Map<string, Institution>();
-      for (const i of institutions) m.set(i._id, i);
-      return m;
-   }, [institutions]);
 
    const [loading, setLoading] = useState(false);
    const [loadError, setLoadError] = useState<string | null>(null);
@@ -164,11 +166,79 @@ const Courses: React.FC = () => {
    const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
    const [selectedLevels, setSelectedLevels] = useState<string[]>([]);
    const [selectedInstitutionId, setSelectedInstitutionId] = useState<string | null>(null);
-   const [includePrivate, setIncludePrivate] = useState(true);
-   const [includeGovernment, setIncludeGovernment] = useState(true);
    const [sourceFilter, setSourceFilter] = useState<'all' | 'private' | 'government'>('all');
-   const [maxFee, setMaxFee] = useState(2500000);
    const [availableLevels, setAvailableLevels] = useState<string[]>([]);
+
+   const selectedLevelKeySet = useMemo(() => {
+      return new Set(selectedLevels.map((v) => normalizeKey(v)).filter(Boolean));
+   }, [selectedLevels]);
+
+   // SourceFilter is the single source of truth for visibility.
+   const showPrivate = sourceFilter === 'all' || sourceFilter === 'private';
+   const showGovernment = sourceFilter === 'all' || sourceFilter === 'government';
+
+   const institutionMap = useMemo(() => {
+      const m = new Map<string, Institution>();
+      for (const i of institutions) m.set(i._id, i);
+      return m;
+   }, [institutions]);
+
+   const privateInstitutionKeySet = useMemo(() => {
+      const s = new Set<string>();
+      for (const i of institutions) {
+         if (i?._id) s.add(normalizeKey(i._id));
+         const code = (i as any)?.institution_code;
+         if (code) s.add(normalizeKey(code));
+      }
+      return s;
+   }, [institutions]);
+
+   const isPrivateProgramLocal = useCallback(
+      (p: Program) => {
+         const instKey = normalizeKey(safeString((p as any)?.institution_id));
+         return !!instKey && privateInstitutionKeySet.has(instKey);
+      },
+      [privateInstitutionKeySet]
+   );
+
+   const governmentInstitutionKeySet = useMemo(() => {
+      const s = new Set<string>();
+      for (const g of governmentInstitutions) s.add(normalizeKey(g._id));
+      return s;
+   }, [governmentInstitutions]);
+
+   // Government programs can come from the public JSON list (institution_id === GOV),
+   // and some may exist in the API (institution_id matches a known government institution).
+   const isGovernmentProgramLocal = useCallback(
+      (p: Program) => {
+         if (isGovernmentProgram(p)) return true;
+         const instKey = normalizeKey(safeString((p as any).institution_id));
+         return !!instKey && governmentInstitutionKeySet.has(instKey);
+      },
+      [governmentInstitutionKeySet]
+   );
+
+   const isGovernmentInstitutionSelected = useMemo(() => {
+      if (!selectedInstitutionId) return false;
+      return selectedInstitutionId === GOVERNMENT_INSTITUTION_ID || governmentInstitutionKeySet.has(normalizeKey(selectedInstitutionId));
+   }, [selectedInstitutionId, governmentInstitutionKeySet]);
+
+   const selectedPrivateInstitution = useMemo(() => {
+      if (!selectedInstitutionId) return null;
+      if (isGovernmentInstitutionSelected) return null;
+      return institutions.find((i) => i._id === selectedInstitutionId) || null;
+   }, [institutions, selectedInstitutionId, isGovernmentInstitutionSelected]);
+
+   const selectedPrivateInstitutionMatchKeys = useMemo(() => {
+      if (!selectedInstitutionId) return [] as string[];
+      if (isGovernmentInstitutionSelected) return [] as string[];
+      const keys = [selectedInstitutionId];
+      const code = selectedPrivateInstitution?.institution_code;
+      if (code) keys.push(code);
+      const name = selectedPrivateInstitution?.name;
+      if (name) keys.push(name);
+      return Array.from(new Set(keys.map((k) => normalizeKey(k)).filter(Boolean)));
+   }, [selectedInstitutionId, isGovernmentInstitutionSelected, selectedPrivateInstitution]);
 
    const [modalOpen, setModalOpen] = useState(false);
    const [editId, setEditId] = useState<string | null>(null);
@@ -186,7 +256,6 @@ const Courses: React.FC = () => {
       curriculum_summary: '',
       specializations_text: '',
       url: '',
-      confidence_score: 0.5,
       extensions_json: '',
    });
 
@@ -196,40 +265,68 @@ const Courses: React.FC = () => {
    }, [searchParams]);
 
    useEffect(() => {
-      if (sourceFilter === 'all') {
-         setIncludePrivate(true);
-         setIncludeGovernment(true);
-         return;
-      }
-
       if (sourceFilter === 'private') {
-         setIncludePrivate(true);
-         setIncludeGovernment(false);
-         if (selectedInstitutionId === GOVERNMENT_INSTITUTION_FILTER_VALUE) setSelectedInstitutionId(null);
+         if (selectedInstitutionId && isGovernmentInstitutionSelected) setSelectedInstitutionId(null);
          return;
       }
 
-      setIncludePrivate(false);
-      setIncludeGovernment(true);
-      if (selectedInstitutionId && selectedInstitutionId !== GOVERNMENT_INSTITUTION_FILTER_VALUE) {
-         setSelectedInstitutionId(GOVERNMENT_INSTITUTION_FILTER_VALUE);
+      if (sourceFilter === 'government') {
+         if (selectedInstitutionId && !isGovernmentInstitutionSelected) setSelectedInstitutionId(null);
       }
-   }, [sourceFilter, selectedInstitutionId]);
+   }, [sourceFilter, selectedInstitutionId, isGovernmentInstitutionSelected]);
 
    useEffect(() => {
       let cancelled = false;
-      InstitutionsService.listInstitutions(1, 1000, undefined, undefined, 'name:asc')
-         .then((res) => {
+      (async () => {
+         try {
+            const all: Institution[] = [];
+            let page = 1;
+            let totalPages = 1;
+            const maxPages = 50;
+
+            while (page <= totalPages && page <= maxPages) {
+               const res = await InstitutionsService.listInstitutions(page, API_PAGE_LIMIT, undefined, undefined, 'name:asc');
+               const data = res.data || [];
+               all.push(...data);
+
+               const nextTotalPages = res.pagination?.total_pages;
+               if (typeof nextTotalPages === 'number' && Number.isFinite(nextTotalPages) && nextTotalPages > 0) {
+                  totalPages = nextTotalPages;
+               } else {
+                  if (data.length < API_PAGE_LIMIT) break;
+               }
+
+               page += 1;
+            }
+
+            if (!cancelled) setInstitutions(all);
+         } catch {
+            if (!cancelled) setInstitutions([]);
+         }
+      })();
+
+      fetch(getGovernmentInstitutionsPublicUrl(), { cache: 'no-store' })
+         .then(async (r) => {
+            if (!r.ok) throw new Error(`Failed to load government universities (${r.status})`);
+            const text = await r.text();
+            return JSON.parse(stripBom(text)) as GovernmentInstitutionsPayload;
+         })
+         .then((payload) => {
             if (cancelled) return;
-            setInstitutions(res.data || []);
+            const list = Array.isArray(payload.institutions) ? payload.institutions : [];
+            const mapped = list
+               .filter((g) => g && typeof g._id === 'string' && typeof g.name === 'string')
+               .map((g) => ({ _id: g._id, name: g.name }));
+            setGovernmentInstitutions(mapped);
          })
          .catch(() => {
             if (cancelled) return;
-            setInstitutions([]);
+            setGovernmentInstitutions([]);
          });
 
       setGovernmentLoadError(null);
-      fetch('/government-degree-programs.json', { cache: 'no-store' })
+      const govUrl = getGovernmentDegreeProgramsPublicUrl();
+      fetch(govUrl, { cache: 'no-store' })
          .then(async (r) => {
             if (!r.ok) throw new Error(`Failed to load government courses (${r.status})`);
             const text = await r.text();
@@ -288,14 +385,14 @@ const Courses: React.FC = () => {
       return () => {
          cancelled = true;
       };
-   }, []);
+   }, [refreshTick]);
 
    useEffect(() => {
       let cancelled = false;
       setLoading(true);
       setLoadError(null);
 
-      if (!includePrivate) {
+      if (!showPrivate) {
          setPrograms([]);
          setLoading(false);
          return () => {
@@ -305,49 +402,103 @@ const Courses: React.FC = () => {
 
       const nameFilter = searchTerm.trim() ? searchTerm.trim() : undefined;
       // API supports one level; if multiple selected we will filter client-side.
-      const apiLevel = selectedLevels.length === 1 ? selectedLevels[0] : undefined;
-
-      const apiInstitutionId = selectedInstitutionId && selectedInstitutionId !== GOVERNMENT_INSTITUTION_FILTER_VALUE
-         ? selectedInstitutionId
+      // Only send the level to the API if it's a known backend level; otherwise
+      // fetch broadly and filter client-side (prevents empty results when backend
+      // isn't available to populate distinct levels).
+      const apiLevel =
+         selectedLevels.length === 1 && availableLevels.includes(selectedLevels[0])
+         ? selectedLevels[0]
          : undefined;
 
-      ProgramsService.listPrograms(
-         1,
-         500,
-         apiInstitutionId,
-         nameFilter,
-         apiLevel,
-         undefined,
-         undefined,
-         undefined,
-         undefined,
-         'name:asc'
-      )
-         .then((res) => {
-            if (cancelled) return;
-            setPrograms(res.data || []);
-         })
-         .catch((err: any) => {
+      const fetchPaged = async (institutionKey?: string) => {
+         const all: Program[] = [];
+         let page = 1;
+         let totalPages = 1;
+         const maxPages = 50;
+
+         while (page <= totalPages && page <= maxPages) {
+            const res = await ProgramsService.listPrograms(
+               page,
+               PROGRAMS_PAGE_LIMIT,
+               institutionKey,
+               nameFilter,
+               apiLevel,
+               undefined,
+               undefined,
+               undefined,
+               undefined,
+               'name:asc'
+            );
+            const data = res.data || [];
+            all.push(...data);
+
+            const nextTotalPages = res.pagination?.total_pages;
+            if (typeof nextTotalPages === 'number' && Number.isFinite(nextTotalPages) && nextTotalPages > 0) {
+               totalPages = nextTotalPages;
+            } else {
+               if (data.length < PROGRAMS_PAGE_LIMIT) break;
+            }
+
+            page += 1;
+         }
+
+         return all;
+      };
+
+      (async () => {
+         try {
+            // If a private institution is selected, try filtering by _id first.
+            // If that yields no results and a code exists, try filtering by institution_code.
+            // If both yield no results, fall back to fetching all programs and filtering client-side.
+            const isGovSelected = !!(selectedInstitutionId && isGovernmentInstitutionSelected);
+            if (selectedInstitutionId && !isGovSelected) {
+               const byId = await fetchPaged(selectedInstitutionId);
+               if (cancelled) return;
+               if (byId.length > 0) {
+                  setPrograms(byId);
+               } else {
+                  const code = selectedPrivateInstitution?.institution_code;
+                  if (code) {
+                     const byCode = await fetchPaged(code);
+                     if (cancelled) return;
+                     if (byCode.length > 0) {
+                        setPrograms(byCode);
+                     } else {
+                        const all = await fetchPaged(undefined);
+                        if (cancelled) return;
+                        setPrograms(all);
+                     }
+                  } else {
+                     const all = await fetchPaged(undefined);
+                     if (cancelled) return;
+                     setPrograms(all);
+                  }
+               }
+            } else {
+               const all = await fetchPaged(undefined);
+               if (cancelled) return;
+               setPrograms(all);
+            }
+         } catch (err: any) {
             if (cancelled) return;
             setLoadError(getErrorMessage(err));
             setPrograms([]);
-         })
-         .finally(() => {
+         } finally {
             if (cancelled) return;
             setLoading(false);
-         });
+         }
+      })();
 
       return () => {
          cancelled = true;
       };
-   }, [searchTerm, selectedLevels, selectedInstitutionId, refreshTick, includePrivate]);
+   }, [searchTerm, selectedLevels, selectedInstitutionId, refreshTick, showPrivate, isGovernmentInstitutionSelected, selectedPrivateInstitution]);
 
    const filteredPrograms = useMemo(() => {
-      const levelOk = (p: Program) => selectedLevels.length === 0 || selectedLevels.includes(safeString(p.level));
-      const feeOk = (p: Program) => {
-         const n = extractNumericFee((p as any).fees);
-         if (n == null) return true;
-         return n <= maxFee;
+      const levelOk = (p: Program) => {
+         if (selectedLevelKeySet.size === 0) return true;
+         const levelKey = normalizeKey(safeString((p as any).level));
+         return selectedLevelKeySet.has(levelKey);
       };
       const searchOk = (p: Program) => {
          const q = searchTerm.trim().toLowerCase();
@@ -358,50 +509,51 @@ const Courses: React.FC = () => {
 
       const institutionOk = (p: Program) => {
          if (!selectedInstitutionId) return true;
-         if (selectedInstitutionId === GOVERNMENT_INSTITUTION_FILTER_VALUE) return isGovernmentProgram(p);
-         return p.institution_id === selectedInstitutionId;
+         if (isGovernmentInstitutionSelected) return isGovernmentProgramLocal(p);
+         if (selectedPrivateInstitutionMatchKeys.length === 0) return p.institution_id === selectedInstitutionId;
+         const instKey = normalizeKey(p.institution_id);
+         return selectedPrivateInstitutionMatchKeys.includes(instKey);
       };
 
       const merged: Program[] = [];
-      if (includePrivate) merged.push(...programs);
-      if (includeGovernment) merged.push(...governmentPrograms);
+      // When the API contains government programs (institution_id matches a known government institution),
+      // keep them out of "Private only" and show them under "Government only".
+      if (showPrivate) {
+         // Strict rule: only show API programs that belong to known private institutions.
+         // This guarantees "Private only" never includes government/unknown courses.
+         const hasPrivateIndex = privateInstitutionKeySet.size > 0;
+         merged.push(
+            ...programs.filter((p) => (hasPrivateIndex ? isPrivateProgramLocal(p) : !isGovernmentProgramLocal(p)))
+         );
+      }
+      if (showGovernment) merged.push(...programs.filter((p) => isGovernmentProgramLocal(p)), ...governmentPrograms);
 
       return merged
-         .filter((p) => institutionOk(p) && levelOk(p) && feeOk(p) && searchOk(p))
+         .filter((p) => institutionOk(p) && levelOk(p) && searchOk(p))
          .sort((a, b) => a.name.localeCompare(b.name));
-   }, [programs, governmentPrograms, selectedLevels, maxFee, includePrivate, includeGovernment, selectedInstitutionId, searchTerm]);
+   }, [
+      programs,
+      governmentPrograms,
+      selectedLevels,
+      selectedLevelKeySet,
+      showPrivate,
+      showGovernment,
+      selectedInstitutionId,
+      searchTerm,
+      governmentInstitutionKeySet,
+      selectedPrivateInstitutionMatchKeys,
+      isGovernmentInstitutionSelected,
+      isGovernmentProgramLocal,
+      isPrivateProgramLocal,
+      privateInstitutionKeySet,
+   ]);
 
    const toggleLevel = (lvl: string) => {
       setSelectedLevels((prev) => (prev.includes(lvl) ? prev.filter((l) => l !== lvl) : [...prev, lvl]));
    };
 
-   const openNew = () => {
-      setEditId(null);
-      setFormError(null);
-      setForm({
-         institution_id:
-            selectedInstitutionId && selectedInstitutionId !== GOVERNMENT_INSTITUTION_FILTER_VALUE
-               ? selectedInstitutionId
-               : institutions[0]?._id || '',
-         name: '',
-         program_code: '',
-         description: '',
-         level: '',
-         duration_json: '',
-         delivery_mode: [],
-         fees_json: '',
-         eligibility_json: '',
-         curriculum_summary: '',
-         specializations_text: '',
-         url: '',
-         confidence_score: 0.5,
-         extensions_json: '',
-      });
-      setModalOpen(true);
-   };
-
    const openEdit = (p: Program) => {
-      if (isGovernmentProgram(p)) {
+      if (isGovernmentProgramLocal(p)) {
          alert('Government courses are read-only here.');
          return;
       }
@@ -420,7 +572,6 @@ const Courses: React.FC = () => {
          curriculum_summary: safeString((p as any).curriculum_summary),
          specializations_text: Array.isArray((p as any).specializations) ? (p as any).specializations.join('\n') : '',
          url: safeString((p as any).url),
-         confidence_score: typeof (p as any).confidence_score === 'number' ? (p as any).confidence_score : 0.5,
          extensions_json: (p as any).extensions ? JSON.stringify((p as any).extensions, null, 2) : '',
       });
       setModalOpen(true);
@@ -428,7 +579,7 @@ const Courses: React.FC = () => {
 
    const handleDelete = (id: string) => {
       const target = filteredPrograms.find((p) => p._id === id);
-      if (target && isGovernmentProgram(target)) {
+      if (target && isGovernmentProgramLocal(target)) {
          alert('Government courses are read-only here.');
          return;
       }
@@ -488,7 +639,6 @@ const Courses: React.FC = () => {
          specializations: specializations as any,
          url: form.url.trim() || undefined,
          extensions,
-         confidence_score: Number.isFinite(form.confidence_score) ? form.confidence_score : 0.5,
       };
 
       const req = editId ? ProgramsService.updateProgram(editId, payload) : ProgramsService.createProgram(payload);
@@ -507,12 +657,40 @@ const Courses: React.FC = () => {
          });
    };
 
+   const apiGovernmentCount = useMemo(() => programs.filter((p) => isGovernmentProgramLocal(p)).length, [programs, isGovernmentProgramLocal]);
+   const apiPrivateCount = useMemo(() => programs.length - apiGovernmentCount, [programs.length, apiGovernmentCount]);
+   const totalLoaded = (showPrivate ? apiPrivateCount : 0) + (showGovernment ? apiGovernmentCount + governmentPrograms.length : 0);
+
+   const institutionFilterOptions = useMemo(() => {
+      if (sourceFilter === 'government') {
+         // Government degree programs are not mapped to specific institutions in the dataset,
+         // so only support filtering as "All Government".
+         return [{ value: GOVERNMENT_INSTITUTION_ID, label: 'All Government (UGC)' }];
+      }
+      if (sourceFilter === 'private') {
+         return institutions.map((i) => ({ value: i._id, label: i.name }));
+      }
+
+      // All: show both groups
+      return [
+         {
+            group: 'Government',
+            items: [{ value: GOVERNMENT_INSTITUTION_ID, label: 'All Government (UGC)' }],
+         },
+         {
+            group: 'Private',
+            items: institutions.map((i) => ({ value: i._id, label: i.name })),
+         },
+      ] as any;
+   }, [institutions, sourceFilter]);
+
    return (
       <Stack>
          <Group justify="space-between">
             <Box>
                <Title order={2}>Courses</Title>
                <Text c="dimmed" size="sm">Manage degree programs and requirements.</Text>
+             
             </Box>
             <Group>
                <Button
@@ -522,215 +700,224 @@ const Courses: React.FC = () => {
                >
                   Filters
                </Button>
-               <Button leftSection={<Plus size={16} />} onClick={openNew}>New Course</Button>
+               <Button leftSection={<Plus size={16} />} onClick={() => navigate('/admin/courses/new')}>New Course</Button>
             </Group>
          </Group>
 
-         <Grid gutter="lg">
-            <Grid.Col span={{ base: 12, md: 3 }}>
-               <Card withBorder radius="md" p="md">
-                  <TextInput 
-                     placeholder="Search..." 
-                     mb="lg" 
-                     leftSection={<Search size={14} />} 
-                     value={searchTerm} 
-                     onChange={(e) => setSearchTerm(e.target.value)} 
+         <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }}>
+            {[
+               { label: 'Total', val: totalLoaded },
+               { label: 'Private', val: showPrivate ? apiPrivateCount : 0 },
+               { label: 'Government', val: showGovernment ? apiGovernmentCount + governmentPrograms.length : 0 },
+               { label: 'Showing', val: filteredPrograms.length },
+            ].map((stat, i) => (
+               <Card key={i} withBorder padding="md" radius="md">
+                  <Text size="xs" fw={700} c="dimmed" tt="uppercase">{stat.label}</Text>
+                  <Text size="xl" fw={700}>{stat.val}</Text>
+               </Card>
+            ))}
+         </SimpleGrid>
+
+         <Card withBorder radius="md" padding="0" mt="md">
+            <Group p="md" justify="space-between" wrap="wrap">
+               <Group wrap="wrap" gap="sm">
+                  <TextInput
+                     placeholder="Search..."
+                     leftSection={<Search size={16} />}
+                     value={searchTerm}
+                     onChange={(e) => setSearchTerm(e.target.value)}
+                     w={320}
                   />
 
-                  <Collapse in={filtersOpen}>
-                     <Stack gap="sm" mb="lg">
-                        <Select
-                           label="Source"
-                           value={sourceFilter}
-                           onChange={(v) => setSourceFilter((v as any) || 'all')}
-                           data={[
-                              { value: 'all', label: 'All (Private + Government)' },
-                              { value: 'private', label: 'Private only' },
-                              { value: 'government', label: 'Government only' },
-                           ]}
-                           size="xs"
-                        />
+                  <Select
+                     placeholder="University Type"
+                     value={sourceFilter}
+                     onChange={(v) => {
+                        const next = (((v as any) || 'all') as any) as 'all' | 'private' | 'government';
+                        setSourceFilter(next);
 
-                        <Select
-                           label="Institution"
-                           placeholder="All"
-                           data={[
-                              { value: GOVERNMENT_INSTITUTION_FILTER_VALUE, label: 'Government (UGC / State)' },
-                              ...institutions.map((i) => ({ value: i._id, label: i.name })),
-                           ]}
-                           value={selectedInstitutionId}
-                           onChange={setSelectedInstitutionId}
-                           clearable
-                           searchable
-                        />
+                        // If user switches source, clear incompatible institution filter immediately
+                        // (avoids a confusing empty table until effects run).
+                        if (next === 'private') {
+                           if (selectedInstitutionId && isGovernmentInstitutionSelected) setSelectedInstitutionId(null);
+                        }
+                        if (next === 'government') {
+                           if (selectedInstitutionId && !isGovernmentInstitutionSelected) {
+                              setSelectedInstitutionId(GOVERNMENT_INSTITUTION_ID);
+                           }
+                        }
+                     }}
+                     data={[
+                        { value: 'all', label: 'All' },
+                        { value: 'private', label: 'Private only' },
+                        { value: 'government', label: 'Government only' },
+                     ]}
+                     w={220}
+                     size="xs"
+                  />
 
-                        <Divider />
+                  <Select
+                     placeholder="Institution"
+                     data={institutionFilterOptions}
+                     value={selectedInstitutionId}
+                     onChange={(val) => {
+                        setSelectedInstitutionId(val);
+                        if (!val) return;
+                        if (val === GOVERNMENT_INSTITUTION_ID || governmentInstitutionKeySet.has(normalizeKey(val))) {
+                           setSourceFilter('government');
+                           return;
+                        }
+                        setSourceFilter('private');
+                     }}
+                     clearable
+                     searchable
+                     w={320}
+                  />
+               </Group>
 
-                        <Group gap="md" justify="space-between">
-                           <Checkbox
-                              label="Private"
-                              checked={includePrivate}
-                              onChange={(e) => {
-                                 const next = e.currentTarget.checked;
-                                 setIncludePrivate(next);
-                                 setSourceFilter(next && includeGovernment ? 'all' : next ? 'private' : 'government');
-                              }}
-                           />
-                           <Checkbox
-                              label="Government"
-                              checked={includeGovernment}
-                              onChange={(e) => {
-                                 const next = e.currentTarget.checked;
-                                 setIncludeGovernment(next);
-                                 setSourceFilter(includePrivate && next ? 'all' : next ? 'government' : 'private');
-                              }}
+               <Group gap="xs" wrap="wrap">
+                  <Button variant="default" size="xs" onClick={() => setRefreshTick((t) => t + 1)}>
+                     Refresh
+                  </Button>
+               </Group>
+            </Group>
+
+            <Collapse in={filtersOpen}>
+               <Box px="md" pb="md">
+                  <Card withBorder radius="md" p="md">
+                     <Stack gap="sm">
+                        <Group gap="md" justify="space-between" wrap="wrap">
+                           <Text size="sm" c="dimmed">
+                              Use “University Type” above to switch between Private/Government.
+                           </Text>
+
+                           <MultiSelect
+                              label="Level"
+                              placeholder="All"
+                              data={(availableLevels.length ? availableLevels : ['Certificate', 'Diploma', 'Bachelor', 'Master', 'Doctorate', 'Postgraduate']).map((v) => ({ value: v, label: v }))}
+                              value={selectedLevels}
+                              onChange={(val) => setSelectedLevels(val)}
+                              searchable
+                              clearable
+                              w={360}
                            />
                         </Group>
-                        <Divider />
                      </Stack>
-                  </Collapse>
-                  
-                  <Stack gap="xs" mb="lg">
-                     <Text size="sm" fw={500}>Level</Text>
-                     {(availableLevels.length ? availableLevels : ['Certificate','Diploma','Bachelor','Master','Doctorate','Postgraduate']).map(lvl => (
-                        <Checkbox 
-                           key={lvl} 
-                           label={lvl} 
-                           checked={selectedLevels.includes(lvl)} 
-                           onChange={() => toggleLevel(lvl)} 
-                        />
-                     ))}
-                  </Stack>
+                  </Card>
+               </Box>
+            </Collapse>
 
-                  <Box>
-                     <Group justify="space-between" mb="xs">
-                        <Text size="sm" fw={500}>Max Fee</Text>
-                        <Text size="xs" fw={700} c="blue">{maxFee >= 1000000 ? (maxFee/1000000).toFixed(1)+'M' : (maxFee/1000).toFixed(0)+'k'}</Text>
-                     </Group>
-                     <RangeSlider 
-                        min={0} 
-                        max={5000000} 
-                        step={100000} 
-                        value={[0, maxFee]} 
-                        onChange={(val) => setMaxFee(val[1])} 
-                        color="blue"
-                     />
-                  </Box>
-
-                  {loadError ? (
-                     <Alert mt="lg" color="red" title="Unable to load courses" withCloseButton onClose={() => setLoadError(null)}>
+            {loadError ? (
+               <Box px="md" pb="md">
+                  <Alert color="red" title="Unable to load courses" withCloseButton onClose={() => setLoadError(null)}>
+                     <Stack gap={6}>
                         <Text size="sm">{loadError}</Text>
-                        <Group justify="flex-end" mt="sm">
-                           <Button size="xs" variant="default" onClick={() => setRefreshTick((t) => t + 1)}>Retry</Button>
+                        <Group justify="flex-end" gap="xs">
+                           <Button size="xs" variant="default" onClick={() => setRefreshTick((t) => t + 1)}>
+                              Retry
+                           </Button>
                         </Group>
-                     </Alert>
-                  ) : null}
+                     </Stack>
+                  </Alert>
+               </Box>
+            ) : null}
 
-                  {governmentLoadError ? (
-                     <Alert mt="lg" color="yellow" title="Government courses not loaded" withCloseButton onClose={() => setGovernmentLoadError(null)}>
+            {showGovernment && governmentLoadError ? (
+               <Box px="md" pb="md">
+                  <Alert color="yellow" title="Government courses not loaded" withCloseButton onClose={() => setGovernmentLoadError(null)}>
+                     <Stack gap={6}>
                         <Text size="sm">{governmentLoadError}</Text>
-                        <Text size="xs" c="dimmed">Expected file: /government-degree-programs.json</Text>
-                     </Alert>
-                  ) : null}
-               </Card>
-            </Grid.Col>
+                        <Text size="sm" c="dimmed">
+                           Expected file: <Code>{getGovernmentDegreeProgramsPublicUrl()}</Code>
+                        </Text>
+                     </Stack>
+                  </Alert>
+               </Box>
+            ) : null}
 
-            <Grid.Col span={{ base: 12, md: 9 }}>
-               {loading ? (
-                  <Group justify="center" py="xl">
-                     <Loader size="sm" />
-                     <Text c="dimmed">Loading…</Text>
-                  </Group>
-               ) : (
-                  <Grid>
-                     {filteredPrograms.map((p) => {
-                        const inst = institutionMap.get(p.institution_id);
-                        const gov = isGovernmentProgram(p);
-                        const institutionLabel = gov ? 'Government (State Universities)' : (inst?.name || p.institution_id);
+            <Table>
+               <Table.Thead bg={isDark ? 'dark.6' : 'gray.0'}>
+                  <Table.Tr>
+                     <Table.Th>Course</Table.Th>
+                     <Table.Th>Level</Table.Th>
+                     <Table.Th>Source</Table.Th>
+                     <Table.Th style={{ textAlign: 'right' }}>Action</Table.Th>
+                  </Table.Tr>
+               </Table.Thead>
+               <Table.Tbody>
+                  {loading ? (
+                     <Table.Tr>
+                        <Table.Td colSpan={4} align="center" py="xl">
+                           <Group justify="center" gap="xs">
+                              <Loader size="sm" />
+                              <Text c="dimmed" size="sm">Loading courses…</Text>
+                           </Group>
+                        </Table.Td>
+                     </Table.Tr>
+                  ) : filteredPrograms.length === 0 ? (
+                     <Table.Tr>
+                        <Table.Td colSpan={4} align="center" py="xl" c="dimmed">
+                           No courses found
+                        </Table.Td>
+                     </Table.Tr>
+                  ) : (
+                     filteredPrograms.map((p) => {
+                        const gov = isGovernmentProgramLocal(p);
+                        const level = safeString((p as any).level) || '—';
+                        const url = safeString((p as any).url) || '';
                         return (
-                           <Grid.Col key={p._id} span={{ base: 12, md: 6 }}>
-                              <Card withBorder radius="md" p="lg">
-                                 <Group align="flex-start" mb="md" justify="space-between">
-                                    <Group>
-                                       <ThemeIcon size={40} radius="md" variant="light" color="blue">
-                                          <GraduationCap size={24} />
-                                       </ThemeIcon>
-                                       <Box>
-                                          <Text fw={700} lineClamp={1}>{p.name}</Text>
-                                          <Group gap={8} align="center">
-                                             <Text size="xs" c="dimmed">{institutionLabel}</Text>
-                                             {gov ? <Badge size="xs" variant="light" color="gray">Government</Badge> : null}
-                                          </Group>
-                                       </Box>
-                                    </Group>
-                                    <ActionIcon
-                                       variant="subtle"
-                                       color="gray"
-                                       component="a"
-                                       href={(p as any).url || '#'}
-                                       target={(p as any).url ? '_blank' : undefined}
-                                       rel={(p as any).url ? 'noreferrer' : undefined}
-                                       onClick={(e) => {
-                                          if (!(p as any).url) e.preventDefault();
-                                       }}
-                                    >
-                                       <ExternalLink size={16} />
-                                    </ActionIcon>
-                                 </Group>
-
-                                 <Grid gutter="xs" mb="md">
-                                    <Grid.Col span={6}>
-                                       <Card bg={isDark ? 'dark.6' : 'gray.0'} p="xs" radius="sm">
-                                          <Group gap={4} mb={4}>
-                                             <Award size={14} />
-                                             <Text size="xs" c="dimmed">Eligibility</Text>
-                                          </Group>
-                                          <Text size="xs" fw={600} lineClamp={1}>
-                                             {p.eligibility ? 'Defined' : '—'}
-                                          </Text>
-                                       </Card>
-                                    </Grid.Col>
-                                    <Grid.Col span={6}>
-                                       <Card bg={isDark ? 'dark.6' : 'gray.0'} p="xs" radius="sm">
-                                          <Group gap={4} mb={4}>
-                                             <DollarSign size={14} />
-                                             <Text size="xs" c="dimmed">Fees</Text>
-                                          </Group>
-                                          <Text size="xs" fw={600} lineClamp={1}>{formatFees((p as any).fees)}</Text>
-                                       </Card>
-                                    </Grid.Col>
-                                 </Grid>
-
-                                 <Group justify="space-between">
-                                    <Stack gap={0}>
-                                       <Text size="xs" fw={700} c="dimmed" tt="uppercase">
-                                          {(p as any).program_code ? String((p as any).program_code) : '—'}
-                                       </Text>
-                                       <Text size="xs" c="blue">{safeString((p as any).level) || '—'}</Text>
-                                    </Stack>
-                                    <Group gap="xs">
-                                       <Button variant="light" size="xs" leftSection={<Pencil size={12} />} disabled={gov} onClick={() => openEdit(p)}>
+                           <Table.Tr key={p._id}>
+                              <Table.Td>
+                                 <Text fw={600} size="sm" lineClamp={2}>{p.name}</Text>
+                              </Table.Td>
+                              <Table.Td>
+                                 <Badge variant="light" color="blue">{level}</Badge>
+                              </Table.Td>
+                              <Table.Td>
+                                 <Badge size="sm" variant={gov ? 'light' : 'outline'} color={gov ? 'gray' : 'blue'}>
+                                    {gov ? 'Government' : 'Private'}
+                                 </Badge>
+                              </Table.Td>
+                              <Table.Td style={{ textAlign: 'right' }}>
+                                 <Menu position="bottom-end">
+                                    <Menu.Target>
+                                       <ActionIcon variant="subtle" color="gray" aria-label="Actions">
+                                          <MoreVertical size={16} />
+                                       </ActionIcon>
+                                    </Menu.Target>
+                                    <Menu.Dropdown>
+                                       <Menu.Item leftSection={<Eye size={14} />} onClick={() => navigate(`/admin/courses/${p._id}`)}>
+                                          View details
+                                       </Menu.Item>
+                                       <Menu.Divider />
+                                       <Menu.Item
+                                          leftSection={<ExternalLink size={14} />}
+                                          disabled={!url}
+                                          component={url ? 'a' : 'button'}
+                                          href={url || undefined}
+                                          target={url ? '_blank' : undefined}
+                                          rel={url ? 'noreferrer' : undefined}
+                                       >
+                                          Open link
+                                       </Menu.Item>
+                                       <Menu.Item leftSection={<Pencil size={14} />} disabled={gov} onClick={() => openEdit(p)}>
                                           Edit
-                                       </Button>
-                                       <Button variant="subtle" color="red" size="xs" leftSection={<Trash2 size={12} />} disabled={gov} onClick={() => handleDelete(p._id)}>
+                                       </Menu.Item>
+                                       <Menu.Item leftSection={<Trash2 size={14} />} color="red" disabled={gov} onClick={() => handleDelete(p._id)}>
                                           Delete
-                                       </Button>
-                                    </Group>
-                                 </Group>
-                              </Card>
-                           </Grid.Col>
+                                       </Menu.Item>
+                                    </Menu.Dropdown>
+                                 </Menu>
+                              </Table.Td>
+                           </Table.Tr>
                         );
-                     })}
-                  </Grid>
-               )}
+                     })
+                  )}
+               </Table.Tbody>
+            </Table>
+         </Card>
 
-               {!loading && filteredPrograms.length === 0 && (
-                  <Text ta="center" c="dimmed" mt="xl">No courses found.</Text>
-               )}
-            </Grid.Col>
-         </Grid>
-
-         <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title={editId ? "Edit Course" : "Add New Course"} size="lg">
+         <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="Edit Course" size="lg">
             <Stack>
                {formError ? (
                   <Alert color="red" title="Can't save" withCloseButton onClose={() => setFormError(null)}>
@@ -756,15 +943,6 @@ const Courses: React.FC = () => {
                      value={form.level || null}
                      onChange={(val) => setForm((p) => ({ ...p, level: val || '' }))}
                      clearable
-                  />
-                  <NumberInput
-                     label="Confidence Score"
-                     min={0}
-                     max={1}
-                     step={0.05}
-                     decimalScale={2}
-                     value={form.confidence_score}
-                     onChange={(val) => setForm((p) => ({ ...p, confidence_score: typeof val === 'number' ? val : 0.5 }))}
                   />
                </Group>
 
@@ -793,7 +971,7 @@ const Courses: React.FC = () => {
 
                <Group justify="flex-end" mt="xs">
                   <Button variant="default" onClick={() => setModalOpen(false)}>Cancel</Button>
-                  <Button onClick={handleSave}>{editId ? 'Update Course' : 'Save Course'}</Button>
+                  <Button onClick={handleSave}>Update Course</Button>
                </Group>
             </Stack>
          </Modal>

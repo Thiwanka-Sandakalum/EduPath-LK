@@ -146,12 +146,17 @@ const AIChat = () => {
     }
   }, [activeSession?.messages, isTyping]);
 
-  const handleSend = async (e?: React.FormEvent) => {
+  const handleSend = async (
+    e?: React.FormEvent,
+    overrideText?: string,
+    sessionOverride?: { session: ChatSession; sessionId: string }
+  ) => {
     if (e) e.preventDefault();
-    if (!input.trim() || isTyping) return;
+    const promptText = (overrideText ?? input).trim();
+    if (!promptText || isTyping) return;
 
-    let currentSession = activeSession;
-    let sessionId = activeSessionId;
+    let currentSession = sessionOverride?.session ?? activeSession;
+    let sessionId = sessionOverride?.sessionId ?? activeSessionId;
 
     if (!currentSession) {
       sessionId = Date.now().toString();
@@ -167,13 +172,13 @@ const AIChat = () => {
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
-      text: input,
+      text: promptText,
       timestamp: new Date()
     };
 
     const updatedMessages = [...currentSession.messages, userMsg];
     saveChatSession({ ...currentSession, messages: updatedMessages });
-    const userPrompt = input;
+    const userPrompt = promptText;
     setInput('');
     setIsTyping(true);
     setCurrentSources([]);
@@ -238,6 +243,32 @@ const AIChat = () => {
       setIsTyping(false);
     }
   };
+
+  // If navigated from Tools (e.g., Student Handbook Guide), seed a first question.
+  useEffect(() => {
+    const state: any = (location as any)?.state;
+    const seedPrompt: string | undefined = state?.seedPrompt;
+    if (!seedPrompt || typeof seedPrompt !== 'string' || !seedPrompt.trim()) return;
+
+    const newSessionId = Date.now().toString();
+    const newSession: ChatSession = {
+      id: newSessionId,
+      title: 'Student Handbook Guide',
+      date: 'Today',
+      messages: [],
+    };
+
+    // Start fresh and send the seeded prompt immediately.
+    setActiveSessionId(newSessionId);
+    setInput('');
+    setCurrentSources([]);
+    saveChatSession(newSession);
+    handleSend(undefined, seedPrompt, { session: newSession, sessionId: newSessionId });
+
+    // Clear navigation state so refresh doesn't resend.
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    (window as any).history?.replaceState?.({}, document.title);
+  }, [location, saveChatSession]);
 
   const handleNewChat = () => {
     setActiveSessionId(null);

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { studentLoans } from '../../data/mockData';
 import {
   Calculator,
   ArrowRight,
@@ -12,6 +11,37 @@ import {
   Info
 } from 'lucide-react';
 
+type StudentLoan = {
+  id: string;
+  name: string;
+  provider: string;
+  interestRate: string;
+  maxAmount: string;
+  duration: string;
+  eligibility: string[];
+  features: string[];
+  applyLink: string;
+};
+
+type StudentLoansResponse = {
+  updatedAt?: string;
+  studentLoans: StudentLoan[];
+};
+
+const calculateMonthlyPayment = (principal: number, annualInterestRatePercent: number, years: number) => {
+  const months = years * 12;
+  if (!isFinite(months) || months <= 0) return 0;
+
+  const monthlyRate = annualInterestRatePercent / 12 / 100;
+  if (!isFinite(monthlyRate) || monthlyRate < 0) return 0;
+
+  if (monthlyRate === 0) return principal / months;
+
+  const factor = Math.pow(1 + monthlyRate, months);
+  const emi = (principal * monthlyRate * factor) / (factor - 1);
+  return isFinite(emi) ? emi : 0;
+};
+
 const Loans = () => {
   const [amount, setAmount] = useState(500000);
   const [interest, setInterest] = useState(12);
@@ -19,15 +49,49 @@ const Loans = () => {
   const [monthlyPayment, setMonthlyPayment] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [loans, setLoans] = useState<StudentLoan[]>([]);
+  const [loansLoading, setLoansLoading] = useState(true);
+  const [loansError, setLoansError] = useState<string | null>(null);
 
   useEffect(() => {
-    const r = interest / 12 / 100;
-    const n = years * 12;
-    const emi = (amount * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
-    setMonthlyPayment(isFinite(emi) ? emi : 0);
+    setMonthlyPayment(calculateMonthlyPayment(amount, interest, years));
   }, [amount, interest, years]);
 
-  const filteredLoans = studentLoans.filter(loan => {
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadLoans = async () => {
+      try {
+        setLoansLoading(true);
+        setLoansError(null);
+        const res = await fetch('/student-loans.json', { signal: controller.signal });
+        if (!res.ok) {
+          setLoans([]);
+          setLoansError('Unable to load student loan data.');
+          return;
+        }
+
+        const data = (await res.json()) as StudentLoansResponse;
+        if (Array.isArray(data?.studentLoans) && data.studentLoans.length > 0) {
+          setLoans(data.studentLoans);
+        } else {
+          setLoans([]);
+          setLoansError('Student loan data is empty or invalid.');
+        }
+      } catch (e) {
+        if ((e as any)?.name === 'AbortError') return;
+        setLoans([]);
+        setLoansError('Unable to load student loan data.');
+      } finally {
+        setLoansLoading(false);
+      }
+    };
+
+    void loadLoans();
+    return () => controller.abort();
+  }, []);
+
+  const filteredLoans = loans.filter(loan => {
     const matchesSearch = loan.provider.toLowerCase().includes(searchQuery.toLowerCase()) ||
       loan.name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSearch;
@@ -125,7 +189,23 @@ const Loans = () => {
           {/* RIGHT: Loan details */}
           <div className="lg:col-span-8">
             <div className="space-y-8">
-          {filteredLoans.length === 0 && (
+          {loansLoading && (
+            <div className="text-center py-32 bg-slate-50 dark:bg-slate-900/50 rounded-[3rem] border-2 border-dashed border-slate-200 dark:border-slate-800 reveal">
+              <div className="w-20 h-20 bg-white dark:bg-slate-800 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-sm text-slate-300"><Search size={32} /></div>
+              <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-3">Loading Loans</h3>
+              <p className="text-slate-500 dark:text-slate-400 font-medium max-w-sm mx-auto">Fetching the latest student loan data...</p>
+            </div>
+          )}
+
+          {!loansLoading && loansError && (
+            <div className="text-center py-32 bg-slate-50 dark:bg-slate-900/50 rounded-[3rem] border-2 border-dashed border-slate-200 dark:border-slate-800 reveal">
+              <div className="w-20 h-20 bg-white dark:bg-slate-800 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-sm text-slate-300"><Search size={32} /></div>
+              <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-3">Loans Unavailable</h3>
+              <p className="text-slate-500 dark:text-slate-400 font-medium max-w-sm mx-auto">{loansError}</p>
+            </div>
+          )}
+
+          {!loansLoading && !loansError && filteredLoans.length === 0 && (
             <div className="text-center py-32 bg-slate-50 dark:bg-slate-900/50 rounded-[3rem] border-2 border-dashed border-slate-200 dark:border-slate-800 reveal">
               <div className="w-20 h-20 bg-white dark:bg-slate-800 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-sm text-slate-300"><Search size={32} /></div>
               <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-3">No Loans Found</h3>
@@ -133,7 +213,7 @@ const Loans = () => {
               <button onClick={() => setSearchQuery('')} className="mt-10 text-primary-600 font-black text-[11px] uppercase tracking-widest hover:underline">Clear search</button>
             </div>
           )}
-          {filteredLoans.map(loan => {
+          {!loansLoading && !loansError && filteredLoans.map(loan => {
             const isExpanded = expandedId === loan.id;
             return (
               <div
@@ -229,11 +309,11 @@ const Loans = () => {
                           </h4>
                           <div className="text-sm text-slate-600 dark:text-slate-400 mb-2">For a loan of <span className="font-bold">LKR 500,000</span> at <span className="font-bold">{loan.interestRate}</span> for <span className="font-bold">5 years</span>:</div>
                           <div className="text-2xl font-black text-primary-700 dark:text-primary-300 mb-2">LKR {(() => {
-                            const p = 500000;
-                            const r = parseFloat(loan.interestRate) / 12 / 100;
-                            const n = 5 * 12;
-                            const emi = (p * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
-                            return isFinite(emi) ? emi.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-';
+                              const p = 500000;
+                              const parsedAnnualRate = parseFloat(loan.interestRate);
+                              if (!isFinite(parsedAnnualRate)) return '-';
+                              const emi = calculateMonthlyPayment(p, parsedAnnualRate, 5);
+                              return emi > 0 ? emi.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '-';
                           })()}</div>
                           <div className="text-xs text-slate-500">per month (approximate)</div>
                         </div>

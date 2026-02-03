@@ -12,6 +12,38 @@ const heroImages = [
    "https://assets.isu.pub/document-structure/230327182313-9086558d064b85922de67c062a19bad3/v1/868b4162dce7d830200dd158612ee2ee.jpeg"
 ];
 
+const getClientSessionId = () => {
+   try {
+      const key = 'edupath_client_session_v1';
+      const existing = localStorage.getItem(key);
+      if (existing) return existing;
+      const created = `sess_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+      localStorage.setItem(key, created);
+      return created;
+   } catch {
+      return `sess_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+   }
+};
+
+const getApiBaseUrl = () => {
+   const cfg = (window as any)?.config;
+   return (cfg?.BASE_API_URL as string | undefined) || 'http://localhost:2000';
+};
+
+const trackScholarshipView = async (scholarshipId: string) => {
+   try {
+      const base = getApiBaseUrl();
+      const session_id = getClientSessionId();
+      await fetch(`${base}/analytics/scholarships/${encodeURIComponent(scholarshipId)}/view`, {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ session_id }),
+      });
+   } catch {
+      // ignore tracking errors
+   }
+};
+
 const ScholarshipsPage = () => {
    const [searchParams] = useSearchParams();
    const initialQuery = searchParams.get('q') || '';
@@ -57,7 +89,14 @@ const ScholarshipsPage = () => {
    };
 
    const toggleExpand = (id: string) => {
-      setExpandedId(prev => prev === id ? null : id);
+      setExpandedId(prev => {
+         const next = prev === id ? null : id;
+         // Track only when opening the details.
+         if (next === id) {
+            void trackScholarshipView(id);
+         }
+         return next;
+      });
    };
 
    return (

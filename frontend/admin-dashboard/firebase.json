@@ -2,6 +2,12 @@
   "hosting": {
     "public": "dist",
     "site": "edupathlk-admin",
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
     "ignore": [
       "firebase.json",
       "**/.*",

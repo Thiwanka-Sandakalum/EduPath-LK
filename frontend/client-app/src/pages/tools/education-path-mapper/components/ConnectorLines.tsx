@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface ConnectorLinesProps {
   parentRefId: string;
@@ -11,26 +11,33 @@ const ConnectorLines: React.FC<ConnectorLinesProps> = ({
   childrenRefIds,
   orientation = 'vertical',
 }) => {
+  const svgRef = useRef<SVGSVGElement | null>(null);
   const [paths, setPaths] = useState<string[]>([]);
 
   useEffect(() => {
     const updatePaths = () => {
       const parent = document.getElementById(parentRefId);
-      if (!parent) return;
+      const svg = svgRef.current;
+      if (!parent || !svg) return;
 
       const parentRect = parent.getBoundingClientRect();
+      const svgRect = svg.getBoundingClientRect();
       const scrollY = window.scrollY;
       const scrollX = window.scrollX;
+
+      // Convert page coordinates -> SVG-local coordinates.
+      const originX = svgRect.left + scrollX;
+      const originY = svgRect.top + scrollY;
 
       let parentX: number;
       let parentY: number;
 
       if (orientation === 'vertical') {
-        parentX = parentRect.left + parentRect.width / 2 + scrollX;
-        parentY = parentRect.bottom + scrollY;
+        parentX = parentRect.left + parentRect.width / 2 + scrollX - originX;
+        parentY = parentRect.bottom + scrollY - originY;
       } else {
-        parentX = parentRect.right + scrollX;
-        parentY = parentRect.top + parentRect.height / 2 + scrollY;
+        parentX = parentRect.right + scrollX - originX;
+        parentY = parentRect.top + parentRect.height / 2 + scrollY - originY;
       }
 
       const newPaths = childrenRefIds
@@ -43,15 +50,15 @@ const ConnectorLines: React.FC<ConnectorLinesProps> = ({
           let childY: number;
 
           if (orientation === 'vertical') {
-            childX = childRect.left + childRect.width / 2 + scrollX;
-            childY = childRect.top + scrollY;
+            childX = childRect.left + childRect.width / 2 + scrollX - originX;
+            childY = childRect.top + scrollY - originY;
 
             const midY = parentY + (childY - parentY) * 0.5;
             return `M ${parentX} ${parentY} C ${parentX} ${midY}, ${childX} ${midY}, ${childX} ${childY}`;
           }
 
-          childX = childRect.left + scrollX;
-          childY = childRect.top + childRect.height / 2 + scrollY;
+          childX = childRect.left + scrollX - originX;
+          childY = childRect.top + childRect.height / 2 + scrollY - originY;
 
           const midX = parentX + (childX - parentX) * 0.5;
           return `M ${parentX} ${parentY} C ${midX} ${parentY}, ${midX} ${childY}, ${childX} ${childY}`;
@@ -80,21 +87,34 @@ const ConnectorLines: React.FC<ConnectorLinesProps> = ({
 
   return (
     <svg
+      ref={svgRef}
       className="absolute inset-0 pointer-events-none w-full h-full z-0 overflow-visible"
       style={{ minHeight: '100%', pointerEvents: 'none' }}
       aria-hidden="true"
     >
       {paths.map((d, i) => (
-        <path
-          key={i}
-          d={d}
-          fill="none"
-          stroke="#cbd5e1"
-          strokeWidth={1.5}
-          strokeLinecap="round"
-          strokeDasharray="2 6"
-          opacity={0.9}
-        />
+        <g key={i}>
+          {/* soft underlay for contrast */}
+          <path
+            d={d}
+            fill="none"
+            stroke="currentColor"
+            className="text-slate-200 dark:text-slate-800"
+            strokeWidth={6}
+            strokeLinecap="round"
+            opacity={0.75}
+          />
+          {/* main connector */}
+          <path
+            d={d}
+            fill="none"
+            stroke="currentColor"
+            className="text-slate-400 dark:text-slate-600"
+            strokeWidth={2.75}
+            strokeLinecap="round"
+            opacity={0.95}
+          />
+        </g>
       ))}
     </svg>
   );

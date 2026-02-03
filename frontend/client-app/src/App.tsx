@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import Navbar from './components/layout/Navbar/Navbar';
 import ChatWidget from './features/chat/components/ChatWidget/ChatWidget';
+import LoadingScreen from './components/LoadingScreen';
 
 import Home from './pages/HomePage';
 import InstitutionsPage from './features/institutions/pages/InstitutionsPage';
@@ -34,6 +35,7 @@ const CourseDetailRoute = () => {
 
 
 const App = () => {
+  const [bootComplete, setBootComplete] = useState(false);
   const {
     isLoading,
     isAuthenticated,
@@ -41,6 +43,10 @@ const App = () => {
     loginWithRedirect: login,
     user,
   } = useAuth0();
+
+  const handleBootFinished = useCallback(() => {
+    setBootComplete(true);
+  }, []);
 
   // Keep a lightweight registry of logged-in students so Admin can show them.
   // NOTE: This is browser localStorage (per-origin). If admin and client are on different domains/ports,
@@ -106,7 +112,9 @@ const App = () => {
     }
   }, [isLoading, isAuthenticated, error, login]);
 
-  if (isLoading) return "Loading...";
+  if (isLoading || !bootComplete) {
+    return <LoadingScreen onFinished={handleBootFinished} />;
+  }
 
   if (error) {
     const auth0ErrorCode = (error as any)?.error;
@@ -127,7 +135,7 @@ const App = () => {
   }
 
   if (!isAuthenticated) {
-    return <div>Redirecting to login...</div>;
+    return <LoadingScreen onFinished={handleBootFinished} />;
   }
 
   return (
