@@ -1,15 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
    Title, Text, Group, Button, TextInput, SimpleGrid, Card, Table, Badge, Modal, Stack, SegmentedControl, Select, Box, Textarea, useMantineColorScheme
 } from '@mantine/core';
-import { Search, Plus, MapPin, Globe, Calendar, Clock, BarChart3 } from 'lucide-react';
+import { Search, Plus, MapPin, Globe, Clock, BarChart3 } from 'lucide-react';
 import { Scholarship } from '../types';
+import { OpenAPI } from '../types/core/OpenAPI';
+import { onAdminDataChanged } from '../utils/adminEvents';
 
 type ScholarshipWithRaw = Scholarship & { raw?: unknown };
 
 const SCHOLARSHIPS_PUBLIC_URL = '/scholarship.json';
 const LOCAL_STORAGE_KEY = 'edupath_admin_scholarships_v1';
+
+type ScholarshipAnalytics = {
+   scholarship_id: string;
+   total_views: number;
+   total_unique_viewers: number;
+   last_14_days: Array<{ date: string; views: number; unique_viewers: number }>;
+};
 
 function safeStringify(value: unknown): string {
    try {
@@ -136,30 +145,19 @@ function saveLocalScholarships(items: ScholarshipWithRaw[]) {
 const Scholarships: React.FC = () => {
    const { colorScheme } = useMantineColorScheme();
    const isDark = colorScheme === 'dark';
-   const [searchParams] = useSearchParams();
    const navigate = useNavigate();
+   const [searchParams] = useSearchParams();
    const [scholarships, setScholarships] = useState<ScholarshipWithRaw[]>([]);
    const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
    const [filterType, setFilterType] = useState('All');
-   const [modalOpen, setModalOpen] = useState(false);
-   const [newSch, setNewSch] = useState<Partial<Scholarship>>({ type: 'Local', status: 'Open' });
-   const [newDetails, setNewDetails] = useState<{
-      category: string;
-      scholarshipType: string;
-      eligibility: string;
-      benefits: string;
-      applicationProcess: string;
-      conditions: string;
-   }>({
-      category: '',
-      scholarshipType: '',
-      eligibility: '',
-      benefits: '',
-      applicationProcess: '',
-      conditions: '',
-   });
    const [detailsOpen, setDetailsOpen] = useState(false);
    const [selected, setSelected] = useState<ScholarshipWithRaw | null>(null);
+
+   const [analyticsOpen, setAnalyticsOpen] = useState(false);
+   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+   const [analyticsScholarship, setAnalyticsScholarship] = useState<ScholarshipWithRaw | null>(null);
+   const [analyticsData, setAnalyticsData] = useState<ScholarshipAnalytics | null>(null);
 
    useEffect(() => {
      const query = searchParams.get('search');
@@ -194,6 +192,42 @@ const Scholarships: React.FC = () => {
       };
    }, []);
 
+   useEffect(() => {
+      // Refresh local scholarships after creating on the separate page.
+      return onAdminDataChanged((event: any) => {
+         const source = event?.detail?.source;
+         if (source !== 'scholarships') return;
+
+         setScholarships((prev) => {
+            const local = loadLocalScholarships();
+            const nonLocal = prev.filter((s) => !String(s.id).startsWith('local-'));
+            return [...local, ...nonLocal];
+         });
+      });
+   }, []);
+
+   const openAnalytics = async (sch: ScholarshipWithRaw) => {
+      setAnalyticsScholarship(sch);
+      setAnalyticsOpen(true);
+      setAnalyticsLoading(true);
+      setAnalyticsError(null);
+      setAnalyticsData(null);
+      try {
+         const res = await fetch(
+            `${OpenAPI.BASE}/analytics/scholarships/${encodeURIComponent(String(sch.id))}`,
+            { headers: { Accept: 'application/json' } },
+         );
+         if (!res.ok) {
+            throw new Error(`Failed to load analytics (${res.status})`);
+         }
+         const json = (await res.json()) as ScholarshipAnalytics;
+         setAnalyticsData(json);
+      } catch (e) {
+         setAnalyticsError((e as Error)?.message || 'Failed to load analytics');
+      }
+      setAnalyticsLoading(false);
+   };
+
    const filtered = useMemo(() => {
       const term = searchTerm.trim().toLowerCase();
       return scholarships.filter((s) => {
@@ -209,61 +243,15 @@ const Scholarships: React.FC = () => {
       });
    }, [filterType, scholarships, searchTerm]);
 
-   const handleSave = () => {
-      if(!newSch.title) return;
-
-      const category = (newDetails.category || newSch.provider || 'Scholarships').trim() || 'Scholarships';
-      const benefitsParsed = parseJsonOrString(newDetails.benefits);
-      const valueFromBenefits = normalizeValue(benefitsParsed);
-
-      const created: ScholarshipWithRaw = {
-         ...(newSch as Scholarship),
-         id: `local-${Date.now()}`,
-         provider: category,
-         deadLine: newSch.deadLine || '-',
-         status: (newSch.status || 'Open') as Scholarship['status'],
-         value: newSch.value || valueFromBenefits || '-',
-         views: 0,
-         clicks: 0,
-         applications: 0,
-         raw: {
-            category,
-            name: newSch.title,
-            type: newDetails.scholarshipType || undefined,
-            eligibility: newDetails.eligibility || undefined,
-            benefits: benefitsParsed,
-            application_process: newDetails.applicationProcess || undefined,
-            conditions: newDetails.conditions || undefined,
-         },
-      };
-
-      setScholarships((prev) => {
-         const next = [created, ...prev];
-         const locals = next.filter((s) => String(s.id).startsWith('local-'));
-         saveLocalScholarships(locals);
-         return next;
-      });
-      setModalOpen(false);
-      setNewSch({ type: 'Local', status: 'Open' });
-      setNewDetails({
-         category: '',
-         scholarshipType: '',
-         eligibility: '',
-         benefits: '',
-         applicationProcess: '',
-         conditions: '',
-      });
-   };
-
    return (
       <Stack>
          <Group justify="space-between">
             <Box>
                <Title order={2}>Scholarships</Title>
                <Text c="dimmed" size="sm">Manage financial aid opportunities.</Text>
-               <Text c="dimmed" size="xs">Source: {SCHOLARSHIPS_PUBLIC_URL}</Text>
+               
             </Box>
-            <Button leftSection={<Plus size={16} />} onClick={() => setModalOpen(true)}>Post Scholarship</Button>
+            <Button leftSection={<Plus size={16} />} onClick={() => navigate('/admin/scholarships/new')}>Post Scholarship</Button>
          </Group>
 
          <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }}>
@@ -301,7 +289,6 @@ const Scholarships: React.FC = () => {
                   <Table.Tr>
                      <Table.Th>Opportunity</Table.Th>
                      <Table.Th>Type</Table.Th>
-                     <Table.Th>Deadline</Table.Th>
                      <Table.Th>Status</Table.Th>
                      <Table.Th style={{textAlign:'right'}}>Engagement</Table.Th>
                   </Table.Tr>
@@ -320,12 +307,6 @@ const Scholarships: React.FC = () => {
                            </Group>
                         </Table.Td>
                         <Table.Td>
-                           <Group gap={4}>
-                              <Calendar size={14} />
-                              <Text size="xs">{s.deadLine}</Text>
-                           </Group>
-                        </Table.Td>
-                        <Table.Td>
                            <Badge 
                               variant="light" 
                               color={s.status === 'Open' ? 'green' : s.status === 'Closed' ? 'red' : 'yellow'} 
@@ -335,24 +316,26 @@ const Scholarships: React.FC = () => {
                            </Badge>
                         </Table.Td>
                         <Table.Td style={{textAlign:'right'}}>
-                           <Button 
-                                variant="subtle" 
-                                size="xs" 
-                                rightSection={<BarChart3 size={14} />}
-                                onClick={() => navigate('/admin/analytics')}
-                            >
-                                Analytics
-                            </Button>
-                            <Button
-                               variant="subtle"
-                               size="xs"
-                               onClick={() => {
-                                  setSelected(s);
-                                  setDetailsOpen(true);
-                               }}
-                            >
-                               Details
-                            </Button>
+                           <Group gap="xs" justify="flex-end">
+                              <Button
+                                 variant="subtle"
+                                 size="xs"
+                                 rightSection={<BarChart3 size={14} />}
+                                 onClick={() => void openAnalytics(s)}
+                              >
+                                 Analytics
+                              </Button>
+                              <Button
+                                 variant="subtle"
+                                 size="xs"
+                                 onClick={() => {
+                                    setSelected(s);
+                                    setDetailsOpen(true);
+                                 }}
+                              >
+                                 Details
+                              </Button>
+                           </Group>
                         </Table.Td>
                      </Table.Tr>
                   ))}
@@ -360,63 +343,36 @@ const Scholarships: React.FC = () => {
             </Table>
          </Card>
 
-         <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="Post Scholarship">
-            <Stack>
-               <TextInput
-                  label="Category"
-                  placeholder="e.g., SLIIT Scholarships"
-                  value={newDetails.category}
-                  onChange={(e) => setNewDetails({ ...newDetails, category: e.target.value })}
-               />
-               <TextInput label="Title" required value={newSch.title || ''} onChange={(e) => setNewSch({...newSch, title: e.target.value})} />
-               <TextInput
-                  label="Provider"
-                  description="Optional. If empty, Category will be used."
-                  value={newSch.provider || ''}
-                  onChange={(e) => setNewSch({ ...newSch, provider: e.target.value })}
-               />
-               <Group grow>
-                  <Select label="Type" data={['Local', 'International']} value={newSch.type} onChange={(val) => setNewSch({...newSch, type: val as any})} />
-                  <TextInput label="Value" placeholder="Full Tuition" value={newSch.value || ''} onChange={(e) => setNewSch({...newSch, value: e.target.value})} />
-               </Group>
-               <TextInput label="Deadline" type="date" value={newSch.deadLine || ''} onChange={(e) => setNewSch({...newSch, deadLine: e.target.value})} />
+         <Modal
+            opened={analyticsOpen}
+            onClose={() => {
+               setAnalyticsOpen(false);
+               setAnalyticsScholarship(null);
+               setAnalyticsData(null);
+               setAnalyticsError(null);
+            }}
+            title={analyticsScholarship ? `Analytics: ${analyticsScholarship.title}` : 'Scholarship Analytics'}
+         >
+            <Stack gap="sm">
+               <Text size="sm" c="dimmed">
+                  This shows real client-app users who opened scholarship details.
+               </Text>
 
-               <TextInput
-                  label="Scholarship Type"
-                  placeholder="e.g., Entrance Scholarship / Corporate Scholarship"
-                  value={newDetails.scholarshipType}
-                  onChange={(e) => setNewDetails({ ...newDetails, scholarshipType: e.target.value })}
-               />
-               <Textarea
-                  label="Eligibility"
-                  minRows={2}
-                  autosize
-                  value={newDetails.eligibility}
-                  onChange={(e) => setNewDetails({ ...newDetails, eligibility: e.target.value })}
-               />
-               <Textarea
-                  label="Benefits"
-                  description="You can paste JSON (object/array) or plain text."
-                  minRows={3}
-                  autosize
-                  value={newDetails.benefits}
-                  onChange={(e) => setNewDetails({ ...newDetails, benefits: e.target.value })}
-               />
-               <Textarea
-                  label="Application Process"
-                  minRows={2}
-                  autosize
-                  value={newDetails.applicationProcess}
-                  onChange={(e) => setNewDetails({ ...newDetails, applicationProcess: e.target.value })}
-               />
-               <Textarea
-                  label="Conditions"
-                  minRows={2}
-                  autosize
-                  value={newDetails.conditions}
-                  onChange={(e) => setNewDetails({ ...newDetails, conditions: e.target.value })}
-               />
-               <Button onClick={handleSave}>Publish</Button>
+               {analyticsLoading && <Text size="sm">Loading…</Text>}
+               {analyticsError && <Text size="sm" c="red">{analyticsError}</Text>}
+
+               {analyticsData && (
+                  <SimpleGrid cols={2}>
+                     <Card withBorder padding="md" radius="md">
+                        <Text size="xs" fw={700} c="dimmed" tt="uppercase">Users Viewed</Text>
+                        <Text size="xl" fw={700}>{analyticsData.total_unique_viewers ?? 0}</Text>
+                     </Card>
+                     <Card withBorder padding="md" radius="md">
+                        <Text size="xs" fw={700} c="dimmed" tt="uppercase">Total Detail Opens</Text>
+                        <Text size="xl" fw={700}>{analyticsData.total_views ?? 0}</Text>
+                     </Card>
+                  </SimpleGrid>
+               )}
             </Stack>
          </Modal>
 

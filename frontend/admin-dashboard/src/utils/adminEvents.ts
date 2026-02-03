@@ -1,6 +1,6 @@
 export const ADMIN_DATA_CHANGED_EVENT = 'edupath-admin-data-changed';
 
-export type AdminDataChangeSource = 'institutions' | 'courses' | 'students' | 'other';
+export type AdminDataChangeSource = 'institutions' | 'courses' | 'scholarships' | 'students' | 'other';
 
 export function emitAdminDataChanged(source: AdminDataChangeSource = 'other') {
   try {

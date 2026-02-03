@@ -126,7 +126,63 @@ const monthlyData = [
   { name: 'W5', visits: 19500 },
 ];
 
-type ScholarshipEngagementDatum = { name: 'Local' | 'International'; value: number };
+type StudentLevelLabel = 'After O/L' | 'After A/L' | 'Diploma' | 'Degree' | 'PhD';
+type StudentLevelDatum = { name: StudentLevelLabel; value: number; count: number; percent: number };
+
+function normalizeStudentLevel(value: unknown, fallbackFromStudent: any): StudentLevelLabel {
+  const raw = String(value || '').trim().toLowerCase();
+  const compact = raw.replace(/\s+/g, '');
+
+  if (
+    compact === 'afterol' ||
+    compact === 'aftero/l' ||
+    compact === 'ol' ||
+    compact === 'o/l' ||
+    raw.includes('o/l') ||
+    raw === 'ol'
+  ) {
+    return 'After O/L';
+  }
+
+  if (
+    compact === 'afteral' ||
+    compact === 'aftera/l' ||
+    compact === 'al' ||
+    compact === 'a/l' ||
+    raw.includes('a/l') ||
+    raw === 'al'
+  ) {
+    return 'After A/L';
+  }
+
+  if (raw.includes('diploma')) return 'Diploma';
+  if (raw.includes('degree') || raw.includes('bsc') || raw.includes('ba') || raw.includes('undergraduate')) return 'Degree';
+  if (raw.includes('phd') || raw.includes('doctorate')) return 'PhD';
+
+  // If level isn't provided, infer a reasonable default.
+  const stream = String(fallbackFromStudent?.studentDetails?.stream || '').trim();
+  if (stream) return 'After A/L';
+  return 'After O/L';
+}
+
+function computeStudentLevelCountsFromRegistry(): Record<StudentLevelLabel, number> {
+  const users = safeParseJson<any[]>(localStorage.getItem(STUDENT_REGISTRY_KEY));
+  const counts: Record<StudentLevelLabel, number> = {
+    'After O/L': 0,
+    'After A/L': 0,
+    Diploma: 0,
+    Degree: 0,
+    PhD: 0,
+  };
+
+  if (!Array.isArray(users)) return counts;
+  for (const u of users) {
+    const levelRaw = (u as any)?.studentDetails?.level ?? (u as any)?.studentDetails?.educationLevel ?? (u as any)?.level;
+    const label = normalizeStudentLevel(levelRaw, u);
+    counts[label] += 1;
+  }
+  return counts;
+}
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -146,7 +202,8 @@ const Dashboard: React.FC = () => {
   const [recentInstitutions, setRecentInstitutions] = useState<Institution[]>([]);
 
   // Dynamically get colors from theme
-  const PIE_COLORS = [theme.colors.blue[6], theme.colors.teal[6]];
+  const PIE_COLORS = [theme.colors.blue[6], theme.colors.teal[6], theme.colors.violet[6], theme.colors.orange[6], theme.colors.grape[6]];
+  const pieStroke = theme.colorScheme === 'dark' ? theme.colors.dark[7] : theme.white;
 
   const [refreshTick, setRefreshTick] = useState(0);
 
@@ -225,14 +282,20 @@ const Dashboard: React.FC = () => {
     };
   }, [refreshTick]);
 
-  const scholarshipEngagement = useMemo<ScholarshipEngagementDatum[]>(() => {
-    const total = (scholarshipSplit.local || 0) + (scholarshipSplit.international || 0);
-    if (!total) return [{ name: 'Local', value: 0 }, { name: 'International', value: 0 }];
-    return [
-      { name: 'Local', value: Math.round((scholarshipSplit.local / total) * 100) },
-      { name: 'International', value: Math.round((scholarshipSplit.international / total) * 100) },
-    ];
-  }, [scholarshipSplit.international, scholarshipSplit.local]);
+  const studentLevelEngagement = useMemo<StudentLevelDatum[]>(() => {
+    const counts = computeStudentLevelCountsFromRegistry();
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    const order: StudentLevelLabel[] = ['After O/L', 'After A/L', 'Diploma', 'Degree', 'PhD'];
+    return order.map((name) => {
+      const count = counts[name];
+      const percent = total ? Math.round((count / total) * 100) : 0;
+      return { name, value: count, count, percent };
+    });
+  }, [refreshTick]);
+
+  const studentLevelTotal = useMemo(() => {
+    return studentLevelEngagement.reduce((sum, d) => sum + d.count, 0);
+  }, [studentLevelEngagement]);
 
   const statsData = useMemo(() => {
     const fmt = (n: number | null) => (n == null ? '—' : n.toLocaleString());
@@ -315,38 +378,70 @@ const Dashboard: React.FC = () => {
         </Card>
 
         <Card radius="md" padding="lg">
-          <Title order={4} mb="lg">Scholarship Split</Title>
-          <Box h={240}>
+          <Group justify="space-between" mb="lg" wrap="wrap">
+            <Title order={4}>Student Level Split</Title>
+          </Group>
+          <Box h={240} pos="relative">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={scholarshipEngagement}
+                  data={studentLevelEngagement}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
                   outerRadius={80}
                   paddingAngle={5}
                   dataKey="value"
+                  stroke={pieStroke}
+                  strokeWidth={2}
                 >
-                  {scholarshipEngagement.map((entry, index) => (
+                  {studentLevelEngagement.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip 
-                   contentStyle={{ backgroundColor: theme.colors.dark[7], borderColor: theme.colors.dark[7], borderRadius: 8, color: 'white' }}
-                   itemStyle={{ color: 'white' }}
+                <Tooltip
+                  formatter={(value: any, _name: any, props: any) => {
+                    const payload = props?.payload as StudentLevelDatum | undefined;
+                    const percent = payload?.percent ?? 0;
+                    return [`${percent}%`, 'Percentage'];
+                  }}
+                  contentStyle={{
+                    backgroundColor: theme.colorScheme === 'dark' ? theme.colors.dark[7] : theme.white,
+                    borderColor: theme.colorScheme === 'dark' ? theme.colors.dark[6] : theme.colors.gray[3],
+                    borderRadius: 8,
+                    color: theme.colorScheme === 'dark' ? 'white' : theme.black,
+                    boxShadow: theme.shadows.md,
+                  }}
+                  itemStyle={{ color: theme.colorScheme === 'dark' ? 'white' : theme.black }}
+                  labelStyle={{ color: theme.colorScheme === 'dark' ? 'white' : theme.black }}
                 />
               </PieChart>
             </ResponsiveContainer>
+
+            <Box
+              pos="absolute"
+              top="50%"
+              left="50%"
+              style={{ transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}
+            >
+              <Text fw={800} size="lg">
+                {studentLevelTotal ? '100%' : '0%'}
+              </Text>
+              <Text size="xs" c="dimmed">
+                Distribution
+              </Text>
+            </Box>
           </Box>
           <Stack gap="xs" mt="md">
-             {scholarshipEngagement.map((item, idx) => (
+             {studentLevelEngagement.map((item, idx) => (
                <Group key={idx} justify="space-between">
                   <Group gap="xs">
                      <Box w={10} h={10} bg={PIE_COLORS[idx]} style={{borderRadius:'50%'}} />
                      <Text size="sm">{item.name}</Text>
                   </Group>
-                  <Text size="sm" fw={700}>{item.value}%</Text>
+                  <Text size="sm" fw={700}>
+                    {item.percent}%
+                  </Text>
                </Group>
              ))}
           </Stack>
@@ -392,7 +487,13 @@ const Dashboard: React.FC = () => {
                   <Badge variant="light" color="blue">{inst.type?.[0] || '—'}</Badge>
                 </Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>
-                  <Button size="xs" variant="light" onClick={() => navigate('/admin/institutions')}>View</Button>
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={() => navigate(`/admin/institutions/${inst._id}`)}
+                  >
+                    View
+                  </Button>
                 </Table.Td>
                </Table.Tr>
               ))

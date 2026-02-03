@@ -1,29 +1,44 @@
-export enum View {
-  SIGN_IN = 'SIGN_IN',
-  STREAM_SELECTION = 'STREAM_SELECTION',
-  AL_FLOW = 'AL_FLOW',
-  OL_FLOW = 'OL_FLOW',
-  RESULTS = 'RESULTS'
-}
+export type EducationLevelId = 'ol' | 'al';
 
-export enum ALCategory {
-  ARTS = 'Arts',
-  TECHNOLOGY = 'Technology',
-  MATHS = 'Maths',
-  SCIENCE = 'Science',
-  COMMERCE = 'Commerce'
-}
+export type OLPathId = 'certificate' | 'diploma' | 'degree';
 
-export enum OLOption {
-  DEGREES = 'Degrees',
-  DIPLOMAS = 'Diplomas',
-  CERTIFICATES = 'Certificates',
-  VOCATIONAL = 'Vocational Courses'
-}
+export type OLFieldId =
+  | 'it'
+  | 'business'
+  | 'design'
+  | 'language'
+  | 'engineering_tech'
+  | 'hospitality'
+  | 'health';
 
-export interface University {
+export type ALStreamId = 'physical' | 'bio' | 'commerce' | 'tech' | 'arts';
+
+export type EducationLevel = {
+  id: EducationLevelId;
   name: string;
-  type: 'Public' | 'Private';
-  location: string;
-  programs: string[];
-}
+};
+
+export type OLPath = {
+  id: OLPathId;
+  name: string;
+  description: string;
+};
+
+export type OLField = {
+  id: OLFieldId;
+  name: string;
+};
+
+export type ALStream = {
+  id: ALStreamId;
+  name: string;
+  subjects?: string[];
+};
+
+export type MapperSuggestion = {
+  programId: string;
+  programName: string;
+  programLevel?: string;
+  institutionId: string;
+  institutionName: string;
+};

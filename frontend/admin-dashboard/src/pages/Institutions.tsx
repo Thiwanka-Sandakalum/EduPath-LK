@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
    ActionIcon,
    Alert,
@@ -7,7 +7,6 @@ import {
    Box,
    Button,
    Card,
-   Collapse,
    Code,
    Divider,
    Group,
@@ -17,6 +16,7 @@ import {
    MultiSelect,
    NumberInput,
    Select,
+   SimpleGrid,
    Stack,
    Table,
    Text,
@@ -25,13 +25,10 @@ import {
    Title,
    useMantineColorScheme,
 } from '@mantine/core';
-import { Building2, Eye, Filter, MoreVertical, Plus, Search, Trash2 } from 'lucide-react';
+import { Building2, Eye, Globe, MoreVertical, Plus, Search, Trash2 } from 'lucide-react';
 import { InstitutionType } from '../types';
-import { OpenAPI } from '../types/core/OpenAPI';
 import { InstitutionsService } from '../types/services/InstitutionsService';
-import { ProgramsService } from '../types/services/ProgramsService';
 import type { Institution as ApiInstitution } from '../types/models/Institution';
-import type { Program } from '../types/models/Program';
 import { emitAdminDataChanged } from '../utils/adminEvents';
 
 const getErrorMessage = (err: any): string => {
@@ -62,6 +59,16 @@ type GovernmentInstitutionsPayload = {
    institutions?: GovernmentInstitution[];
 };
 
+const API_PAGE_LIMIT = 100;
+
+const getGovernmentInstitutionsPublicUrl = () => {
+   const basePath = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '/') ;
+   const origin = typeof window !== 'undefined' ? window.location.origin : '';
+   // Example: origin=http://localhost:3001, basePath=/, result=http://localhost:3001/government-institutions.json
+   // Example: basePath=/admin/, result=http://localhost:3001/admin/government-institutions.json
+   return `${origin}${basePath}government-institutions.json`;
+};
+
 const stripBom = (text: string) => (text && text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
 
 const normalizeWebsiteUrl = (website?: string) => {
@@ -69,6 +76,26 @@ const normalizeWebsiteUrl = (website?: string) => {
    if (!w) return undefined;
    if (w.startsWith('http://') || w.startsWith('https://')) return w;
    return `https://${w}`;
+};
+
+const getWebsiteLabel = (url?: string) => {
+   const raw = (url || '').trim();
+   if (!raw) return undefined;
+   try {
+      const u = new URL(raw);
+      return u.hostname.replace(/^www\./i, '');
+   } catch {
+      // Fallback for any odd/non-absolute URLs
+      return raw.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0] || 'Website';
+   }
+};
+
+const getVerificationStatus = (inst: ApiInstitution, isGovernment: boolean) => {
+   if (isGovernment) return { label: 'Verified', color: 'green' as const };
+   const score = inst.confidence_score ?? 0;
+   if (score >= 0.75) return { label: 'Verified', color: 'green' as const };
+   if (score >= 0.5) return { label: 'Review', color: 'yellow' as const };
+   return { label: 'Unverified', color: 'red' as const };
 };
 
 const toIsoDate = (yyyyMmDd?: string) => {
@@ -81,6 +108,7 @@ const toIsoDate = (yyyyMmDd?: string) => {
 const Institutions: React.FC = () => {
    const { colorScheme } = useMantineColorScheme();
    const isDark = colorScheme === 'dark';
+   const navigate = useNavigate();
    const [searchParams] = useSearchParams();
 
    const [apiInstitutions, setApiInstitutions] = useState<ApiInstitution[]>([]);
@@ -91,7 +119,6 @@ const Institutions: React.FC = () => {
    const [refreshTick, setRefreshTick] = useState(0);
 
    const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
-   const [filtersOpen, setFiltersOpen] = useState(false);
    const [typeFilter, setTypeFilter] = useState<string | null>(null);
 
    const [addModalOpen, setAddModalOpen] = useState(false);
@@ -122,13 +149,6 @@ const Institutions: React.FC = () => {
       return lines.length ? lines : undefined;
    };
 
-   const [detailsOpen, setDetailsOpen] = useState(false);
-   const [selectedId, setSelectedId] = useState<string | null>(null);
-   const [selectedInstitution, setSelectedInstitution] = useState<ApiInstitution | null>(null);
-   const [relatedPrograms, setRelatedPrograms] = useState<Program[]>([]);
-   const [detailsLoading, setDetailsLoading] = useState(false);
-   const [detailsError, setDetailsError] = useState<string | null>(null);
-
    useEffect(() => {
       const query = searchParams.get('search');
       if (query !== null) setSearchTerm(query);
@@ -141,14 +161,40 @@ const Institutions: React.FC = () => {
 
       setGovernmentLoadError(null);
 
-      const apiPromise = InstitutionsService.listInstitutions(1, 1000, undefined, undefined, 'name:asc')
-         .then((res) => res.data || [])
-         .catch((err: any) => {
+      const apiPromise = (async () => {
+         try {
+            const all: ApiInstitution[] = [];
+            let page = 1;
+            let totalPages = 1;
+
+            // Page through the API (backend enforces limit <= 100).
+            // Safety cap to avoid infinite loops if pagination is missing.
+            const maxPages = 50;
+            while (page <= totalPages && page <= maxPages) {
+               const res = await InstitutionsService.listInstitutions(page, API_PAGE_LIMIT, undefined, undefined, 'name:asc');
+               const data = res.data || [];
+               all.push(...data);
+
+               const nextTotalPages = res.pagination?.total_pages;
+               if (typeof nextTotalPages === 'number' && Number.isFinite(nextTotalPages) && nextTotalPages > 0) {
+                  totalPages = nextTotalPages;
+               } else {
+                  // If pagination metadata is missing, stop when we get less than the page limit.
+                  if (data.length < API_PAGE_LIMIT) break;
+               }
+
+               page += 1;
+            }
+
+            return all;
+         } catch (err: any) {
             if (!cancelled) setLoadError(getErrorMessage(err));
             return [] as ApiInstitution[];
-         });
+         }
+      })();
 
-      const govPromise = fetch('/government-institutions.json', { cache: 'no-store' })
+      const govUrl = getGovernmentInstitutionsPublicUrl();
+      const govPromise = fetch(govUrl, { cache: 'no-store' })
          .then(async (r) => {
             if (!r.ok) throw new Error(`Failed to load government institutions (${r.status})`);
             const text = await r.text();
@@ -223,14 +269,19 @@ const Institutions: React.FC = () => {
    const filteredInstitutions = useMemo(() => {
       const q = searchTerm.trim().toLowerCase();
       const byType = typeFilter
-         ? mergedInstitutions.filter((inst) => (Array.isArray(inst.type) ? inst.type : []).includes(typeFilter))
+         ? mergedInstitutions.filter((inst) => {
+            const isGovernment = governmentInstitutionById.has(inst._id);
+            if (typeFilter === 'Government') return isGovernment;
+            if (typeFilter === 'Private') return !isGovernment;
+            return true;
+         })
          : mergedInstitutions;
       if (!q) return byType;
       return byType.filter((inst) => {
          const hay = `${inst.name} ${(inst.country || '')} ${(Array.isArray(inst.type) ? inst.type.join(' ') : '')}`.toLowerCase();
          return hay.includes(q);
       });
-   }, [mergedInstitutions, searchTerm, typeFilter]);
+   }, [mergedInstitutions, searchTerm, typeFilter, governmentInstitutionById]);
 
    const handleAddSubmit = () => {
       const name = newInstitution.name.trim();
@@ -309,50 +360,8 @@ const Institutions: React.FC = () => {
    };
 
    const openDetails = (id: string) => {
-      setSelectedId(id);
-      setDetailsOpen(true);
+      navigate(`/admin/institutions/${id}`);
    };
-
-   useEffect(() => {
-      if (!detailsOpen || !selectedId) return;
-
-      const gov = governmentInstitutionById.get(selectedId);
-      if (gov) {
-         setDetailsLoading(false);
-         setDetailsError(null);
-         setSelectedInstitution(gov);
-         setRelatedPrograms([]);
-         return;
-      }
-
-      let cancelled = false;
-      setDetailsLoading(true);
-      setDetailsError(null);
-      setSelectedInstitution(null);
-      setRelatedPrograms([]);
-
-      Promise.all([
-         InstitutionsService.getInstitution(selectedId),
-         ProgramsService.listInstitutionPrograms(selectedId, 1, 20),
-      ])
-         .then(([inst, progs]) => {
-            if (cancelled) return;
-            setSelectedInstitution(inst);
-            setRelatedPrograms(progs.data || []);
-         })
-         .catch((err: any) => {
-            if (cancelled) return;
-            setDetailsError(err?.message || 'Failed to load institution details');
-         })
-         .finally(() => {
-            if (cancelled) return;
-            setDetailsLoading(false);
-         });
-
-      return () => {
-         cancelled = true;
-      };
-   }, [detailsOpen, selectedId, governmentInstitutionById]);
 
    return (
       <Box>
@@ -362,31 +371,51 @@ const Institutions: React.FC = () => {
                <Text c="dimmed" size="sm">Manage educational institutions and view related programs.</Text>
             </Box>
             <Group>
-               <Button
-                  variant={filtersOpen ? 'filled' : 'default'}
-                  leftSection={<Filter size={16} />}
-                  onClick={() => setFiltersOpen((v) => !v)}
-               >
-                  Filters
-               </Button>
-               <Button leftSection={<Plus size={16} />} onClick={() => setAddModalOpen(true)}>
+               <Button leftSection={<Plus size={16} />} onClick={() => navigate('/admin/institutions/new')}>
                   Add Institution
                </Button>
             </Group>
          </Group>
 
-         <Card radius="md" padding="0">
-            <Group p="md" justify="space-between">
-               <TextInput
-                  placeholder="Search institutions..."
-                  leftSection={<Search size={16} />}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  w={320}
-               />
-               <Text size="xs" c="dimmed">
-                  Showing {filteredInstitutions.length} institutions
-               </Text>
+         <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }}>
+            {[
+               { label: 'Total', val: mergedInstitutions.length },
+               { label: 'Private', val: apiInstitutions.length },
+               { label: 'Government', val: governmentInstitutions.length },
+               { label: 'Showing', val: filteredInstitutions.length },
+            ].map((stat, i) => (
+               <Card key={i} withBorder padding="md" radius="md">
+                  <Text size="xs" fw={700} c="dimmed" tt="uppercase">{stat.label}</Text>
+                  <Text size="xl" fw={700}>{stat.val}</Text>
+               </Card>
+            ))}
+         </SimpleGrid>
+
+         <Card withBorder radius="md" padding="0" mt="md">
+            <Group p="md" justify="space-between" wrap="wrap">
+               <Group wrap="wrap" gap="sm">
+                  <TextInput
+                     placeholder="Search..."
+                     leftSection={<Search size={16} />}
+                     value={searchTerm}
+                     onChange={(e) => setSearchTerm(e.target.value)}
+                     w={300}
+                  />
+                  <Select
+                     placeholder="Type"
+                     data={['Government', 'Private']}
+                     value={typeFilter}
+                     onChange={setTypeFilter}
+                     clearable
+                     w={200}
+                     size="xs"
+                  />
+               </Group>
+               <Group gap="xs" wrap="wrap">
+                  <Button variant="default" size="xs" onClick={() => setRefreshTick((t) => t + 1)}>
+                     Refresh
+                  </Button>
+               </Group>
             </Group>
 
             {loadError ? (
@@ -399,9 +428,6 @@ const Institutions: React.FC = () => {
                   >
                      <Stack gap={6}>
                         <Text size="sm">{loadError}</Text>
-                        <Text size="sm" c="dimmed">
-                           API base: <Code>{OpenAPI.BASE || '(empty)'}</Code>
-                        </Text>
                         <Group justify="flex-end" gap="xs">
                            <Button variant="default" size="xs" onClick={() => setRefreshTick((t) => t + 1)}>
                               Retry
@@ -423,114 +449,103 @@ const Institutions: React.FC = () => {
                      <Stack gap={6}>
                         <Text size="sm">{governmentLoadError}</Text>
                         <Text size="sm" c="dimmed">
-                           Expected file: <Code>/government-institutions.json</Code>
+                           Expected file: <Code>{getGovernmentInstitutionsPublicUrl()}</Code>
                         </Text>
                      </Stack>
                   </Alert>
                </Box>
             ) : null}
 
-            <Collapse in={filtersOpen}>
-               <Group px="md" pb="md" bg={isDark ? 'dark.7' : 'gray.0'}>
-                  <Select
-                     placeholder="Filter by Type"
-                     data={Object.values(InstitutionType)}
-                     value={typeFilter}
-                     onChange={setTypeFilter}
-                     clearable
-                     size="xs"
-                  />
-               </Group>
-            </Collapse>
-
             <Table>
                <Table.Thead bg={isDark ? 'dark.6' : 'gray.0'}>
                   <Table.Tr>
-                     <Table.Th>Name</Table.Th>
+                     <Table.Th>Institution</Table.Th>
                      <Table.Th>Type</Table.Th>
-                     <Table.Th>Country</Table.Th>
-                     <Table.Th>Confidence</Table.Th>
-                     <Table.Th>Updated</Table.Th>
+                     <Table.Th>Verification</Table.Th>
                      <Table.Th style={{ textAlign: 'right' }}>Action</Table.Th>
                   </Table.Tr>
                </Table.Thead>
                <Table.Tbody>
                   {loading ? (
                      <Table.Tr>
-                        <Table.Td colSpan={6} align="center" py="xl">
+                        <Table.Td colSpan={4} align="center" py="xl">
                            <Group justify="center" gap="xs">
                               <Loader size="sm" />
-                              <Text c="dimmed" size="sm">
-                                 Loading institutions…
-                              </Text>
+                              <Text c="dimmed" size="sm">Loading institutions…</Text>
                            </Group>
-                        </Table.Td>
-                     </Table.Tr>
-                  ) : loadError ? (
-                     <Table.Tr>
-                        <Table.Td colSpan={6} align="center" py="xl" c="red">
-                           {loadError}
                         </Table.Td>
                      </Table.Tr>
                   ) : filteredInstitutions.length === 0 ? (
                      <Table.Tr>
-                        <Table.Td colSpan={6} align="center" py="xl" c="dimmed">
+                        <Table.Td colSpan={4} align="center" py="xl" c="dimmed">
                            No institutions found
                         </Table.Td>
                      </Table.Tr>
                   ) : (
-                     filteredInstitutions.map((item) => (
-                        <Table.Tr key={item._id}>
-                           <Table.Td fw={500}>{item.name}</Table.Td>
-                           <Table.Td>
-                              <Group gap={6} wrap="wrap">
-                                 {(Array.isArray(item.type) && item.type.length ? item.type : ['—']).map((t) => (
-                                    <Badge key={t} variant="outline">
-                                       {t}
-                                    </Badge>
-                                 ))}
-                              </Group>
-                           </Table.Td>
-                           <Table.Td>{item.country || '—'}</Table.Td>
-                           <Table.Td>
-                              <Badge
-                                 variant="light"
-                                 color={
-                                    item.confidence_score >= 0.75
-                                       ? 'green'
-                                       : item.confidence_score >= 0.5
-                                          ? 'yellow'
-                                          : 'red'
-                                 }
-                              >
-                                 {(item.confidence_score ?? 0).toFixed(2)}
-                              </Badge>
-                           </Table.Td>
-                           <Table.Td>{item.updated_at ? new Date(item.updated_at).toISOString().split('T')[0] : '—'}</Table.Td>
-                           <Table.Td style={{ textAlign: 'right' }}>
-                              <Menu position="bottom-end">
-                                 <Menu.Target>
-                                    <ActionIcon variant="subtle" color="gray">
-                                       <MoreVertical size={16} />
-                                    </ActionIcon>
-                                 </Menu.Target>
-                                 <Menu.Dropdown>
-                                    <Menu.Item leftSection={<Eye size={14} />} onClick={() => openDetails(item._id)}>
-                                       View Details
-                                    </Menu.Item>
-                                    <Menu.Item
-                                       leftSection={<Trash2 size={14} />}
-                                       color="red"
-                                       disabled={governmentInstitutionById.has(item._id)}
-                                       onClick={() => handleDelete(item._id)}
-                                    >
-                                       Delete
-                                    </Menu.Item>
-                                 </Menu.Dropdown>
-                              </Menu>
-                           </Table.Td>
-                        </Table.Tr>
-                     ))
+                     filteredInstitutions.map((item) => {
+                        const isGovernment = governmentInstitutionById.has(item._id);
+                        const verification = getVerificationStatus(item, isGovernment);
+                        return (
+                           <Table.Tr key={item._id}>
+                              <Table.Td>
+                                 <Text fw={600} size="sm">{item.name}</Text>
+                                 <Group gap={8} mt={4} wrap="wrap">
+                                    {item.website ? (
+                                       <Text
+                                          size="xs"
+                                          component="a"
+                                          href={item.website}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          c="dimmed"
+                                          title={item.website}
+                                          style={{ textDecoration: 'none' }}
+                                       >
+                                          <Group gap={6} wrap="nowrap">
+                                             <Globe size={14} />
+                                             <Text span size="xs" c="dimmed">
+                                                {getWebsiteLabel(item.website) || 'Website'}
+                                             </Text>
+                                          </Group>
+                                       </Text>
+                                    ) : null}
+                                 </Group>
+                              </Table.Td>
+                              <Table.Td>
+                                 <Badge variant={isGovernment ? 'light' : 'outline'} color={isGovernment ? 'gray' : 'blue'}>
+                                    {isGovernment ? 'Government' : 'Private'}
+                                 </Badge>
+                              </Table.Td>
+                              <Table.Td>
+                                 <Badge variant="light" color={verification.color}>
+                                    {verification.label}
+                                 </Badge>
+                              </Table.Td>
+                              <Table.Td style={{ textAlign: 'right' }}>
+                                 <Menu position="bottom-end">
+                                    <Menu.Target>
+                                       <ActionIcon variant="subtle" color="gray">
+                                          <MoreVertical size={16} />
+                                       </ActionIcon>
+                                    </Menu.Target>
+                                    <Menu.Dropdown>
+                                       <Menu.Item leftSection={<Eye size={14} />} onClick={() => openDetails(item._id)}>
+                                          View Details
+                                       </Menu.Item>
+                                       <Menu.Item
+                                          leftSection={<Trash2 size={14} />}
+                                          color="red"
+                                          disabled={isGovernment}
+                                          onClick={() => handleDelete(item._id)}
+                                       >
+                                          Delete
+                                       </Menu.Item>
+                                    </Menu.Dropdown>
+                                 </Menu>
+                              </Table.Td>
+                           </Table.Tr>
+                        );
+                     })
                   )}
                </Table.Tbody>
             </Table>
@@ -639,85 +654,6 @@ const Institutions: React.FC = () => {
                   <Button onClick={handleAddSubmit}>Register</Button>
                </Group>
             </Stack>
-         </Modal>
-
-         <Modal
-            opened={detailsOpen}
-            onClose={() => {
-               setDetailsOpen(false);
-               setSelectedId(null);
-            }}
-            title={
-               <Group>
-                  <Building2 size={20} />
-                  <Text fw={700}>Institution Details</Text>
-               </Group>
-            }
-            size="lg"
-         >
-            {detailsLoading ? (
-               <Group justify="center" py="xl">
-                  <Loader size="sm" />
-                  <Text c="dimmed">Loading…</Text>
-               </Group>
-            ) : detailsError ? (
-               <Text c="red">{detailsError}</Text>
-            ) : !selectedInstitution ? (
-               <Text c="dimmed">No data</Text>
-            ) : (
-               <Stack gap="sm">
-                  <Title order={4}>{selectedInstitution.name}</Title>
-
-                  <Group gap="xs" wrap="wrap">
-                     {(Array.isArray(selectedInstitution.type) && selectedInstitution.type.length ? selectedInstitution.type : ['—']).map((t) => (
-                        <Badge key={t} variant="outline">
-                           {t}
-                        </Badge>
-                     ))}
-                     <Badge variant="light">{selectedInstitution.country || '—'}</Badge>
-                     <Badge variant="light">Confidence: {(selectedInstitution.confidence_score ?? 0).toFixed(2)}</Badge>
-                  </Group>
-
-                  {selectedInstitution.website ? (
-                     <Text size="sm">
-                        Website:{' '}
-                        <a href={selectedInstitution.website} target="_blank" rel="noreferrer">
-                           {selectedInstitution.website}
-                        </a>
-                     </Text>
-                  ) : null}
-
-                  {selectedInstitution.description ? <Text size="sm" c="dimmed">{selectedInstitution.description}</Text> : null}
-
-                  <Divider my="sm" />
-                  <Title order={5}>Related Programs (first 20)</Title>
-
-                  {relatedPrograms.length === 0 ? (
-                     <Text size="sm" c="dimmed">
-                        No programs found.
-                     </Text>
-                  ) : (
-                     <Box style={{ maxHeight: 260, overflow: 'auto' }}>
-                        <Table striped highlightOnHover>
-                           <Table.Thead>
-                              <Table.Tr>
-                                 <Table.Th>Name</Table.Th>
-                                 <Table.Th>Level</Table.Th>
-                              </Table.Tr>
-                           </Table.Thead>
-                           <Table.Tbody>
-                              {relatedPrograms.map((p) => (
-                                 <Table.Tr key={(p as any)._id || (p as any).id || p.name}>
-                                    <Table.Td>{p.name}</Table.Td>
-                                    <Table.Td>{(p as any).level || '—'}</Table.Td>
-                                 </Table.Tr>
-                              ))}
-                           </Table.Tbody>
-                        </Table>
-                     </Box>
-                  )}
-               </Stack>
-            )}
          </Modal>
       </Box>
    );

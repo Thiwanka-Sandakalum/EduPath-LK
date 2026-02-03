@@ -1,0 +1,11 @@
+{
+  "name": "edupath-backend",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix main-service run dev",
+    "build": "npm --prefix main-service run build",
+    "start": "npm --prefix main-service run start",
+    "lint": "npm --prefix main-service run lint",
+    "format": "npm --prefix main-service run format"
+  }
+}
